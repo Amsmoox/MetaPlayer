@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MetaPlayer</string>
+    <string name="add_playlist">Add Playlist</string>
+    <string name="playlist_url">Playlist URL</string>
+    <string name="load_playlist">Load Playlist</string>
+    <string name="channels">Channels</string>
+    <string name="no_channels">No channels available</string>
+    <string name="loading">Loading...</string>
+    <string name="error_loading_playlist">Error loading playlist</string>
+    <string name="enter_m3u_url">Enter M3U URL</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="back">Back</string>
+</resources>
