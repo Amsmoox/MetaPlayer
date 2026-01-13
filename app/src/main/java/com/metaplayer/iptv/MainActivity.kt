@@ -6,13 +6,17 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.metaplayer.iptv.data.model.ChannelCategory
+import com.metaplayer.iptv.presentation.ui.screens.CategoryChannelsScreen
 import com.metaplayer.iptv.presentation.ui.screens.PlaylistScreen
 import com.metaplayer.iptv.presentation.ui.screens.PlayerScreen
+import com.metaplayer.iptv.presentation.ui.screens.WelcomeScreen
 import com.metaplayer.iptv.presentation.ui.theme.MetaPlayerTheme
 import com.metaplayer.iptv.presentation.viewmodel.PlaylistViewModel
 import com.metaplayer.iptv.presentation.viewmodel.PlayerViewModel
@@ -27,20 +31,51 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
-                    val playlistViewModel: PlaylistViewModel = viewModel()
+                    val playlistViewModel: PlaylistViewModel = viewModel(
+                        factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(application)
+                    )
                     val playerViewModel: PlayerViewModel = viewModel()
+                    
+                    // Welcome screen state
+                    var showWelcome by remember { mutableStateOf(true) }
 
-                    NavHost(
-                        navController = navController,
-                        startDestination = "playlist"
-                    ) {
+                    if (showWelcome) {
+                        WelcomeScreen(
+                            onWelcomeComplete = { showWelcome = false }
+                        )
+                    } else {
+                        NavHost(
+                            navController = navController,
+                            startDestination = "playlist"
+                        ) {
                         composable("playlist") {
                             PlaylistScreen(
                                 viewModel = playlistViewModel,
+                                onCategoryClick = { category ->
+                                    navController.navigate("category/${category.name}")
+                                },
+                                onExit = { finish() }
+                            )
+                        }
+                        
+                        composable("category/{categoryName}") { backStackEntry ->
+                            val categoryName = backStackEntry.arguments?.getString("categoryName") ?: ""
+                            val category = try {
+                                ChannelCategory.valueOf(categoryName)
+                            } catch (e: Exception) {
+                                ChannelCategory.LIVE_TV
+                            }
+                            
+                            val channels = playlistViewModel.uiState.value.channels
+                            
+                            CategoryChannelsScreen(
+                                category = category,
+                                channels = channels,
                                 onChannelClick = { channel ->
                                     playerViewModel.playChannel(channel)
                                     navController.navigate("player")
-                                }
+                                },
+                                onBackClick = { navController.popBackStack() }
                             )
                         }
                         
@@ -56,6 +91,7 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 navController.popBackStack()
                             }
+                        }
                         }
                     }
                 }

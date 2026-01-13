@@ -11,8 +11,8 @@ android {
         applicationId = "com.metaplayer.iptv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -75,10 +75,24 @@ dependencies {
     // Google Fonts
     implementation("androidx.compose.ui:ui-text-google-fonts:1.5.3")
 
-    // ExoPlayer
+    // ExoPlayer Core - Professional Setup
     implementation("androidx.media3:media3-exoplayer:1.2.0")
     implementation("androidx.media3:media3-ui:1.2.0")
     implementation("androidx.media3:media3-common:1.2.0")
+    implementation("androidx.media3:media3-session:1.2.0")
+    
+    // ExoPlayer Data Sources - Critical for streaming
+    implementation("androidx.media3:media3-datasource:1.2.0")
+    implementation("androidx.media3:media3-datasource-okhttp:1.2.0") // Better network handling
+    
+    // ExoPlayer Protocol Support - All IPTV formats
+    implementation("androidx.media3:media3-exoplayer-hls:1.2.0") // HLS streams (most common)
+    implementation("androidx.media3:media3-exoplayer-dash:1.2.0") // DASH adaptive streaming
+    implementation("androidx.media3:media3-exoplayer-rtsp:1.2.0") // RTSP live streams
+    implementation("androidx.media3:media3-exoplayer-smoothstreaming:1.2.0") // Smooth Streaming
+    
+    // ExoPlayer Decoders - Hardware acceleration & codecs
+    implementation("androidx.media3:media3-decoder:1.2.0") // Hardware decoders for 4K
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
@@ -86,6 +100,7 @@ dependencies {
 
     // Network
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 

@@ -1,102 +1,64 @@
 package com.metaplayer.iptv.presentation.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.metaplayer.iptv.data.model.Channel
+import androidx.compose.ui.unit.sp
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.material.icons.filled.ContentCopy
+import com.metaplayer.iptv.data.model.ChannelCategory
 import com.metaplayer.iptv.presentation.viewmodel.PlaylistViewModel
 
 @Composable
 fun PlaylistScreen(
     viewModel: PlaylistViewModel,
-    onChannelClick: (Channel) -> Unit,
+    onCategoryClick: (ChannelCategory) -> Unit,
+    onExit: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        // Header Section
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 2.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
-            ) {
-                Text(
-                    text = "MetaPlayer",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "IPTV Player",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        // Content Section
+    if (uiState.channels.isEmpty() && !uiState.isLoading && uiState.error == null) {
+        UniqueProNoPlaylistScreen(
+            macAddress = uiState.macAddress,
+            onReload = { viewModel.loadM3UUrlFromBackend() },
+            onExit = onExit ?: { /* No exit handler */ }
+        )
+    } else {
         Column(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 20.dp)
+                .background(Color(0xFF080808))
         ) {
-            // URL Input Section
-            PlaylistInputSection(
-                url = uiState.playlistUrl,
-                isLoading = uiState.isLoading,
-                onUrlChange = { viewModel.loadPlaylist(it) },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Channels List
             val error = uiState.error
             when {
                 uiState.isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Color(0xFFFF9D00))
                     }
                 }
                 error != null -> {
-                    ErrorMessage(
-                        message = error,
-                        onDismiss = { viewModel.clearError() }
-                    )
-                }
-                uiState.channels.isEmpty() -> {
-                    EmptyState()
+                    ErrorMessage(message = error, onDismiss = { viewModel.clearError() })
                 }
                 else -> {
-                    ChannelsList(
+                    MainMenuScreen(
                         channels = uiState.channels,
-                        onChannelClick = onChannelClick
+                        onCategoryClick = onCategoryClick
                     )
                 }
             }
@@ -105,243 +67,269 @@ fun PlaylistScreen(
 }
 
 @Composable
-private fun PlaylistInputSection(
-    url: String,
-    isLoading: Boolean,
-    onUrlChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+private fun UniqueProNoPlaylistScreen(
+    macAddress: String,
+    onReload: () -> Unit,
+    onExit: () -> Unit
 ) {
-    var inputUrl by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
-    Column(modifier = modifier) {
-        OutlinedTextField(
-            value = inputUrl,
-            onValueChange = { inputUrl = it },
-            label = { 
-                Text(
-                    "M3U Playlist URL",
-                    style = MaterialTheme.typography.labelLarge
-                ) 
-            },
-            placeholder = { 
-                Text(
-                    "https://example.com/playlist.m3u",
-                    style = MaterialTheme.typography.bodyMedium
-                ) 
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp)),
-            enabled = !isLoading,
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-            ),
-            textStyle = MaterialTheme.typography.bodyMedium,
-            shape = RoundedCornerShape(12.dp)
-        )
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        Button(
-            onClick = { onUrlChange(inputUrl) },
-            enabled = !isLoading && inputUrl.isNotBlank(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 2.dp
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF0F0F0F), Color(0xFF050505))
                 )
-                Spacer(modifier = Modifier.width(10.dp))
-            }
-            Text(
-                "Load Playlist",
-                style = MaterialTheme.typography.labelLarge
             )
-        }
-    }
-}
-
-@Composable
-private fun ChannelsList(
-    channels: List<Channel>,
-    onChannelClick: (Channel) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Channel count header
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(8.dp)
     ) {
-        Text(
-            text = "${channels.size} ${if (channels.size == 1) "channel" else "channels"}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-        )
-    }
-    
-    Spacer(modifier = Modifier.height(12.dp))
-    
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        items(channels) { channel ->
-            ChannelItem(
-                channel = channel,
-                onClick = { onChannelClick(channel) }
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ChannelItem(
-    channel: Channel,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 1.dp,
-            pressedElevation = 2.dp
-        )
-    ) {
-        Row(
+        // Subtle background accent (top right)
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Channel indicator
+                .align(Alignment.TopEnd)
+                .size(400.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(Color(0xFFFF9D00).copy(alpha = 0.05f), Color.Transparent)
+                    )
+                )
+        )
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            // LEFT SIDE: Identity & Instructions
+            Column(
+                modifier = Modifier
+                    .weight(1.2f)
+                    .fillMaxHeight()
+                    .padding(start = 64.dp, end = 32.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Unique Branding
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "META",
+                            style = MaterialTheme.typography.displayLarge.copy(
+                                fontWeight = FontWeight.Black,
+                                fontSize = 52.sp,
+                                letterSpacing = (-2).sp
+                            ),
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "PLAYER",
+                            style = MaterialTheme.typography.displayLarge.copy(
+                                fontWeight = FontWeight.Light,
+                                fontSize = 52.sp,
+                                letterSpacing = (-2).sp
+                            ),
+                            color = Color(0xFFFF9D00)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFFFF9D00), RectangleShape)
+                            .padding(horizontal = 12.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "ULTRA 4K PRO",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.Black,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 2.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(56.dp))
+
+                // Step-by-Step Info
+                InstructionStep(
+                    number = "01",
+                    title = "VISIT PORTAL",
+                    description = "Go to http://metabackend.com/ on your PC or Phone"
+                )
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // MAC Address (The only key needed)
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(Color(0xFFFF9D00), RectangleShape)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "02. YOUR MAC ADDRESS",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, Color(0xFF333333), RectangleShape)
+                            .background(Color(0xFF111111), RectangleShape)
+                            .padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = macAddress.uppercase().ifBlank { "DETECTING..." },
+                            style = MaterialTheme.typography.headlineSmall.copy(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                letterSpacing = 2.sp
+                            ),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(
+                            onClick = {
+                                val clip = android.content.ClipData.newPlainText("MAC", macAddress)
+                                clipboardManager.setPrimaryClip(clip)
+                                Toast.makeText(context, "MAC Copied", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, tint = Color(0xFFFF9D00))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(48.dp))
+
+                // Actions
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    ProfessionalActionBtn(text = "RELOAD SYSTEM", isPrimary = true, onClick = onReload)
+                    ProfessionalActionBtn(text = "CLOSE APP", isPrimary = false, onClick = onExit)
+                }
+            }
+
+            // RIGHT SIDE: QR Experience
             Box(
                 modifier = Modifier
-                    .size(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-            
-            Spacer(modifier = Modifier.width(14.dp))
-            
-            Column(
-                modifier = Modifier.weight(1f)
+                    .weight(0.8f)
+                    .fillMaxHeight()
+                    .background(Color(0xFF0A0A0A))
+                    .padding(48.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = channel.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                channel.group?.let { group ->
-                    Spacer(modifier = Modifier.height(4.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Styled QR Container
+                    Box(
+                        modifier = Modifier
+                            .size(280.dp)
+                            .border(2.dp, Color(0xFFFF9D00), RectangleShape)
+                            .padding(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.White, RectangleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // Placeholder icon for QR
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.Black,
+                                modifier = Modifier.size(80.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
                     Text(
-                        text = group,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = "QUICK ACTIVATE",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = "Scan the code with your phone camera\nto upload your playlist instantly.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 12.dp)
                     )
                 }
             }
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            // Play icon indicator
-            Icon(
-                imageVector = androidx.compose.material.icons.Icons.Default.PlayArrow,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+        }
+    }
+}
+
+@Composable
+private fun InstructionStep(number: String, title: String, description: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Text(
+            text = number,
+            style = MaterialTheme.typography.titleLarge,
+            color = Color(0xFFFF9D00).copy(alpha = 0.5f),
+            fontWeight = FontWeight.Black
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
             )
         }
     }
 }
 
 @Composable
-private fun EmptyState() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 32.dp)
-        ) {
-            Text(
-                text = "No channels loaded",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = "Enter an M3U URL above to load channels",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ErrorMessage(
-    message: String,
-    onDismiss: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
+private fun ProfessionalActionBtn(text: String, isPrimary: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        shape = RectangleShape,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isPrimary) Color(0xFFFF9D00) else Color(0xFF222222),
+            contentColor = if (isPrimary) Color.Black else Color.White
         ),
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier
+            .height(56.dp)
+            .padding(0.dp)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Black,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        )
+    }
+}
+
+@Composable
+private fun ErrorMessage(message: String, onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFE91E63), RectangleShape)
+            .padding(20.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(
-                onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                )
-            ) {
-                Text(
-                    "Dismiss",
-                    style = MaterialTheme.typography.labelLarge
-                )
+            Text(text = message, color = Color.White, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onDismiss) {
+                Text("DISMISS", color = Color.White, fontWeight = FontWeight.Black)
             }
         }
     }

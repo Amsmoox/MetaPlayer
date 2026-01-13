@@ -14,9 +14,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.metaplayer.iptv.data.model.Channel
+import com.metaplayer.iptv.player.PlayerConfig
 import com.metaplayer.iptv.presentation.viewmodel.PlayerViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,8 +29,9 @@ fun PlayerScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    
     val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
+        PlayerConfig.createPlayer(context).apply {
             playWhenReady = true
             repeatMode = Player.REPEAT_MODE_OFF
         }
@@ -90,7 +92,17 @@ fun PlayerScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
+                        
+                        // Player UI Configuration
                         useController = true
+                        controllerShowTimeoutMs = 3000 // Hide controls after 3 seconds
+                        controllerHideOnTouch = true
+                        
+                        // Video display configuration for best quality
+                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        
+                        // Keep screen on while playing
+                        keepScreenOn = true
                     }
                 },
                 modifier = Modifier.fillMaxSize()
