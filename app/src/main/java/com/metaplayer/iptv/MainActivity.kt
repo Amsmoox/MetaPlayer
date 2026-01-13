@@ -6,7 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -16,7 +15,6 @@ import com.metaplayer.iptv.data.model.ChannelCategory
 import com.metaplayer.iptv.presentation.ui.screens.CategoryChannelsScreen
 import com.metaplayer.iptv.presentation.ui.screens.PlaylistScreen
 import com.metaplayer.iptv.presentation.ui.screens.PlayerScreen
-import com.metaplayer.iptv.presentation.ui.screens.WelcomeScreen
 import com.metaplayer.iptv.presentation.ui.theme.MetaPlayerTheme
 import com.metaplayer.iptv.presentation.viewmodel.PlaylistViewModel
 import com.metaplayer.iptv.presentation.viewmodel.PlayerViewModel
@@ -35,26 +33,17 @@ class MainActivity : ComponentActivity() {
                         factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(application)
                     )
                     val playerViewModel: PlayerViewModel = viewModel()
-                    
-                    // Welcome screen state
-                    var showWelcome by remember { mutableStateOf(true) }
 
-                    if (showWelcome) {
-                        WelcomeScreen(
-                            onWelcomeComplete = { showWelcome = false }
-                        )
-                    } else {
-                        NavHost(
-                            navController = navController,
-                            startDestination = "playlist"
-                        ) {
+                    NavHost(
+                        navController = navController,
+                        startDestination = "playlist"
+                    ) {
                         composable("playlist") {
                             PlaylistScreen(
                                 viewModel = playlistViewModel,
                                 onCategoryClick = { category ->
                                     navController.navigate("category/${category.name}")
-                                },
-                                onExit = { finish() }
+                                }
                             )
                         }
                         
@@ -71,6 +60,8 @@ class MainActivity : ComponentActivity() {
                             CategoryChannelsScreen(
                                 category = category,
                                 channels = channels,
+                                viewModel = playerViewModel,
+                                playlistViewModel = playlistViewModel, // Pass for real EPG
                                 onChannelClick = { channel ->
                                     playerViewModel.playChannel(channel)
                                     navController.navigate("player")
@@ -91,7 +82,6 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 navController.popBackStack()
                             }
-                        }
                         }
                     }
                 }

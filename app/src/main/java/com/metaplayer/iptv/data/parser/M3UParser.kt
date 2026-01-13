@@ -13,6 +13,9 @@ class M3UParser {
         return parse(inputStream)
     }
 
+    /**
+     * Re-adding the missing parseFromString method.
+     */
     fun parseFromString(content: String): List<Channel> {
         return content.byteInputStream().use { parse(it) }
     }
@@ -27,62 +30,44 @@ class M3UParser {
         while (reader.readLine().also { line = it } != null) {
             line?.let { currentLine ->
                 when {
-                    currentLine.startsWith("#EXTM3U") -> {
-                        // M3U header, continue
-                    }
                     currentLine.startsWith("#EXTINF:") -> {
-                        // Parse channel info
                         currentChannel = parseExtInf(currentLine)
                     }
                     currentLine.isNotBlank() && !currentLine.startsWith("#") -> {
-                        // This is the stream URL
                         currentChannel?.let { builder ->
-                            channels.add(
-                                builder.copy(url = currentLine.trim()).build()
-                            )
+                            channels.add(builder.copy(url = currentLine.trim()).build())
                             currentChannel = null
                         }
                     }
                     else -> {
-                        // Other lines, ignore
+                        // Ignore other lines (header, comments, etc.)
                     }
                 }
             }
         }
-        
         reader.close()
         return channels
     }
 
     private fun parseExtInf(line: String): ChannelBuilder {
-        // Format: #EXTINF:-1 tvg-id="..." tvg-name="..." tvg-logo="..." group-title="...",Channel Name
         val builder = ChannelBuilder()
-        
-        // Extract attributes
         val attributes = mutableMapOf<String, String>()
-        val attributeRegex = """(\w+(?:-\w+)*)="([^"]*)"""".toRegex()
+        
+        // Match attributes like tvg-id="...", group-title="..." case-insensitively
+        val attributeRegex = """([\w-]+)="([^"]*)"""".toRegex()
         attributeRegex.findAll(line).forEach { matchResult ->
             val (key, value) = matchResult.destructured
-            attributes[key] = value
+            attributes[key.lowercase()] = value // Store as lowercase
         }
         
-        // Extract channel name (after the last comma)
         val nameStart = line.lastIndexOf(',')
-        val channelName = if (nameStart != -1) {
-            line.substring(nameStart + 1).trim()
-        } else {
-            ""
-        }
+        val channelName = if (nameStart != -1) line.substring(nameStart + 1).trim() else ""
         
         builder.name = channelName
         builder.tvgId = attributes["tvg-id"]
-        builder.tvgName = attributes["tvg-name"]
-        builder.tvgLogo = attributes["tvg-logo"]
+        builder.tvgName = attributes["tvg-name"] ?: channelName
         builder.logo = attributes["tvg-logo"] ?: attributes["logo"]
         builder.group = attributes["group-title"]
-        builder.tvgShift = attributes["tvg-shift"]
-        builder.radio = attributes["radio"]?.toBoolean() ?: false
-        builder.catchup = attributes["catchup"]
         
         return builder
     }
@@ -93,23 +78,15 @@ class M3UParser {
         var logo: String? = null,
         var group: String? = null,
         var tvgId: String? = null,
-        var tvgName: String? = null,
-        var tvgLogo: String? = null,
-        var tvgShift: String? = null,
-        var radio: Boolean = false,
-        var catchup: String? = null
+        var tvgName: String? = null
     ) {
         fun build() = Channel(
             name = name,
             url = url,
             logo = logo,
             group = group,
-            tvgId = tvgId,
-            tvgName = tvgName ?: name,
-            tvgLogo = tvgLogo,
-            tvgShift = tvgShift,
-            radio = radio,
-            catchup = catchup
+            tvgId = if (tvgId.isNullOrBlank()) null else tvgId,
+            tvgName = tvgName ?: name
         )
     }
 }

@@ -27,7 +27,7 @@ interface MetaPlayerApi {
     ): Response<DeviceInfoResponse>
     
     /**
-     * Get M3U playlist for device.
+     * Get M3U playlist for device (app parses locally).
      */
     @GET("api/devices/{mac_address}/playlist.m3u")
     suspend fun getPlaylist(

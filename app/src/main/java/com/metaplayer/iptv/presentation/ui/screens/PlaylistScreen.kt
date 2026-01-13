@@ -36,7 +36,14 @@ fun PlaylistScreen(
     if (uiState.channels.isEmpty() && !uiState.isLoading && uiState.error == null) {
         UniqueProNoPlaylistScreen(
             macAddress = uiState.macAddress,
-            onReload = { viewModel.loadM3UUrlFromBackend() },
+            onReload = { 
+                // If device is registered, refresh playlist; otherwise try to load from backend
+                if (uiState.deviceRegistered) {
+                    viewModel.refreshPlaylist()
+                } else {
+                    viewModel.loadM3UUrlFromBackend()
+                }
+            },
             onExit = onExit ?: { /* No exit handler */ }
         )
     } else {

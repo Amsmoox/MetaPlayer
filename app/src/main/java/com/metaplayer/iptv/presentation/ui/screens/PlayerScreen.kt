@@ -2,11 +2,19 @@ package com.metaplayer.iptv.presentation.ui.screens
 
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -19,8 +27,8 @@ import androidx.media3.ui.PlayerView
 import com.metaplayer.iptv.data.model.Channel
 import com.metaplayer.iptv.player.PlayerConfig
 import com.metaplayer.iptv.presentation.viewmodel.PlayerViewModel
+import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     channel: Channel,
@@ -29,11 +37,21 @@ fun PlayerScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var showControls by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
     
     val exoPlayer = remember {
         PlayerConfig.createPlayer(context).apply {
             playWhenReady = true
             repeatMode = Player.REPEAT_MODE_OFF
+        }
+    }
+
+    // Effect to auto-hide controls after 2 seconds
+    LaunchedEffect(showControls) {
+        if (showControls) {
+            delay(2000)
+            showControls = false
         }
     }
 
@@ -50,62 +68,70 @@ fun PlayerScreen(
         }
     }
 
-    Column(
-        modifier = modifier.fillMaxSize()
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) {
+                showControls = !showControls
+            }
     ) {
-        // Top Bar
-        TopAppBar(
-            title = { 
-                Text(
-                    channel.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1
-                ) 
-            },
-            navigationIcon = {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface
+        // 1. FULLSCREEN VIDEO PLAYER
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    player = exoPlayer
+                    layoutParams = FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
                     )
+                    useController = false // Use custom UI for back button
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    keepScreenOn = true
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                titleContentColor = MaterialTheme.colorScheme.onSurface
-            )
+            modifier = Modifier.fillMaxSize()
         )
 
-        // Video Player
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentAlignment = Alignment.Center
+        // 2. IMMERSIVE CONTROLS (Back Button)
+        AnimatedVisibility(
+            visible = showControls,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopStart)
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = exoPlayer
-                        layoutParams = FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                        
-                        // Player UI Configuration
-                        useController = true
-                        controllerShowTimeoutMs = 3000 // Hide controls after 3 seconds
-                        controllerHideOnTouch = true
-                        
-                        // Video display configuration for best quality
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        
-                        // Keep screen on while playing
-                        keepScreenOn = true
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
+            Box(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .size(48.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    .clickable { onBackClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+        
+        // Channel Title Overlay (Optional, also auto-hides)
+        AnimatedVisibility(
+            visible = showControls,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            Text(
+                text = channel.name.uppercase(),
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White.copy(alpha = 0.8f),
+                modifier = Modifier.padding(top = 32.dp)
             )
         }
     }
