@@ -21,6 +21,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.material.icons.filled.ContentCopy
+import com.metaplayer.iptv.data.model.Channel
 import com.metaplayer.iptv.data.model.ChannelCategory
 import com.metaplayer.iptv.presentation.viewmodel.PlaylistViewModel
 
@@ -28,6 +29,7 @@ import com.metaplayer.iptv.presentation.viewmodel.PlaylistViewModel
 fun PlaylistScreen(
     viewModel: PlaylistViewModel,
     onCategoryClick: (ChannelCategory) -> Unit,
+    onChannelClick: (Channel) -> Unit, // Added for Quick Resume
     onExit: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -65,7 +67,9 @@ fun PlaylistScreen(
                 else -> {
                     MainMenuScreen(
                         channels = uiState.channels,
-                        onCategoryClick = onCategoryClick
+                        viewModel = viewModel, // Passed missing viewModel
+                        onCategoryClick = onCategoryClick,
+                        onChannelClick = onChannelClick // Passed missing onChannelClick
                     )
                 }
             }
@@ -332,8 +336,7 @@ private fun ErrorMessage(message: String, onDismiss: () -> Unit) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            verticalAlignment = Alignment.CenterVertically) {
             Text(text = message, color = Color.White, fontWeight = FontWeight.Bold)
             TextButton(onClick = onDismiss) {
                 Text("DISMISS", color = Color.White, fontWeight = FontWeight.Black)

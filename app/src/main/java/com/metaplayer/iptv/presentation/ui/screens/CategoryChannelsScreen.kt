@@ -32,6 +32,7 @@ fun CategoryChannelsScreen(
             VodScreen(
                 channels = categoryChannels,
                 title = "Movies",
+                playlistViewModel = playlistViewModel, // Added missing parameter
                 onMovieClick = onChannelClick,
                 onBackClick = onBackClick
             )
@@ -40,6 +41,7 @@ fun CategoryChannelsScreen(
             VodScreen(
                 channels = categoryChannels,
                 title = "Series",
+                playlistViewModel = playlistViewModel, // Added missing parameter
                 onMovieClick = onChannelClick,
                 onBackClick = onBackClick
             )

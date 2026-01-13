@@ -43,6 +43,10 @@ class MainActivity : ComponentActivity() {
                                 viewModel = playlistViewModel,
                                 onCategoryClick = { category ->
                                     navController.navigate("category/${category.name}")
+                                },
+                                onChannelClick = { channel ->
+                                    playerViewModel.playChannel(channel)
+                                    navController.navigate("player")
                                 }
                             )
                         }

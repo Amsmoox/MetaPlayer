@@ -7,6 +7,8 @@ import com.metaplayer.iptv.data.model.Channel
 import com.metaplayer.iptv.data.model.EpgProgram
 import com.metaplayer.iptv.data.repository.DeviceRepository
 import com.metaplayer.iptv.data.repository.EpgRepository
+import com.metaplayer.iptv.data.repository.FavoritesRepository
+import com.metaplayer.iptv.data.repository.HistoryRepository
 import com.metaplayer.iptv.data.repository.PlaylistRepository
 import com.metaplayer.iptv.data.util.DeviceManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,14 +18,16 @@ import kotlinx.coroutines.launch
 
 data class PlaylistUiState(
     val channels: List<Channel> = emptyList(),
+    val favoriteUrls: Set<String> = emptySet(),
+    val historyUrls: List<String> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val playlistUrl: String = "",
     val macAddress: String = "",
     val deviceRegistered: Boolean = false,
-    val isRegistering: Boolean = false,
     val m3uUrlFromBackend: String? = null,
-    val isRefreshing: Boolean = false
+    // NAVIGATION PERSISTENCE
+    val lastSelectedGroup: String = "ALL CHANNELS",
+    val lastSelectedChannel: Channel? = null
 )
 
 class PlaylistViewModel(
@@ -32,6 +36,8 @@ class PlaylistViewModel(
 
     private val playlistRepository = PlaylistRepository(application)
     private val deviceRepository = DeviceRepository(application)
+    private val favoritesRepository = FavoritesRepository(application)
+    private val historyRepository = HistoryRepository(application)
     val epgRepository = EpgRepository()
 
     private val _uiState = MutableStateFlow(PlaylistUiState())
@@ -39,130 +45,94 @@ class PlaylistViewModel(
 
     init {
         val macAddress = DeviceManager.getMacAddress(application)
-        _uiState.value = _uiState.value.copy(macAddress = macAddress)
+        _uiState.value = _uiState.value.copy(
+            macAddress = macAddress,
+            favoriteUrls = favoritesRepository.getFavorites(),
+            historyUrls = historyRepository.getHistory()
+        )
         loadM3UUrlFromBackend()
+    }
+
+    // UPDATE PERSISTENT STATE
+    fun updateNavigationState(group: String, channel: Channel?) {
+        _uiState.value = _uiState.value.copy(
+            lastSelectedGroup = group,
+            lastSelectedChannel = channel
+        )
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            _uiState.value = PlaylistUiState(macAddress = _uiState.value.macAddress)
+        }
+    }
+
+    fun toggleFavorite(channel: Channel) {
+        favoritesRepository.toggleFavorite(channel.url)
+        _uiState.value = _uiState.value.copy(favoriteUrls = favoritesRepository.getFavorites())
+    }
+
+    fun addToHistory(channel: Channel) {
+        historyRepository.addToHistory(channel.url)
+        _uiState.value = _uiState.value.copy(historyUrls = historyRepository.getHistory())
     }
 
     fun loadM3UUrlFromBackend() {
         viewModelScope.launch {
             deviceRepository.getM3UUrl().fold(
                 onSuccess = { m3uUrl ->
-                    _uiState.value = _uiState.value.copy(
-                        m3uUrlFromBackend = m3uUrl,
-                        deviceRegistered = true,
-                        playlistUrl = m3uUrl
-                    )
+                    _uiState.value = _uiState.value.copy(m3uUrlFromBackend = m3uUrl, deviceRegistered = true)
                     if (m3uUrl.isNotBlank()) {
                         loadPlaylistFromBackend()
-                        
-                        // SMART EPG LOGIC: 
-                        // 1. Try to construct the standard Xtream Codes XMLTV URL
-                        // 2. Fallback to guessing if it's a generic file
-                        val epgUrl = constructEpgUrl(m3uUrl)
-                        epgRepository.fetchEpg(epgUrl)
+                        epgRepository.fetchEpg(constructEpgUrl(m3uUrl))
                     }
                 },
-                onFailure = {
-                    _uiState.value = _uiState.value.copy(
-                        deviceRegistered = false,
-                        m3uUrlFromBackend = null
-                    )
-                }
+                onFailure = { _uiState.value = _uiState.value.copy(deviceRegistered = false) }
             )
         }
-    }
-
-    /**
-     * Professional URL Construction Logic
-     * Converts: http://domain.com/get.php?username=X&password=Y&type=m3u_plus&output=mpegts
-     * Into:    http://domain.com/xmltv.php?username=X&password=Y
-     */
-    private fun constructEpgUrl(m3uUrl: String): String {
-        return try {
-            when {
-                m3uUrl.contains("get.php") && m3uUrl.contains("username=") -> {
-                    val url = m3uUrl.replace("get.php", "xmltv.php")
-                    val urlParts = url.split("?")
-                    if (urlParts.size == 2) {
-                        val params = urlParts[1].split("&")
-                        val relevantParams = params.filter { 
-                            it.startsWith("username=") || it.startsWith("password=")
-                        }
-                        "${urlParts[0]}?${relevantParams.joinToString("&")}"
-                    } else {
-                        url.split("&type=")[0].split("&output=")[0]
-                    }
-                }
-                m3uUrl.contains("/get.php") && m3uUrl.contains("/") -> {
-                    m3uUrl.replace("/get.php", "/xmltv.php")
-                        .split("&type=")[0]
-                        .split("&output=")[0]
-                }
-                m3uUrl.endsWith(".m3u") -> m3uUrl.replace(".m3u", ".xml")
-                m3uUrl.endsWith(".m3u8") -> m3uUrl.replace(".m3u8", ".xml")
-                else -> m3uUrl.replace(".m3u8", ".xml.gz").replace(".m3u", ".xml.gz")
-            }
-        } catch (e: Exception) {
-            m3uUrl.replace("get.php", "xmltv.php").split("&type=")[0].split("&output=")[0]
-        }
-    }
-
-    fun loadPlaylistFromBackend() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-
-            playlistRepository.loadPlaylistFromBackend().fold(
-                onSuccess = { channels ->
-                    _uiState.value = _uiState.value.copy(
-                        channels = channels,
-                        isLoading = false,
-                        error = null
-                    )
-                },
-                onFailure = { exception ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = exception.message ?: "Failed to load playlist"
-                    )
-                }
-            )
-        }
-    }
-    
-    /**
-     * UPDATED: Get EPG programs by ID or Name
-     */
-    fun getEpgForChannel(tvgId: String?, tvgName: String?): List<EpgProgram> {
-        return epgRepository.getProgramsForChannel(tvgId, tvgName)
     }
 
     fun refreshPlaylist() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isRefreshing = true, isLoading = true, error = null)
-            val macAddress = DeviceManager.getMacAddress(getApplication())
-            val api = com.metaplayer.iptv.data.api.ApiClient.api
-            
-            try {
-                val response = api.refreshPlaylist(macAddress)
-                if (response.isSuccessful && response.body()?.success == true) {
-                    kotlinx.coroutines.delay(1000)
-                    loadPlaylistFromBackend()
-                    
-                    val m3uUrl = _uiState.value.m3uUrlFromBackend
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            deviceRepository.getM3UUrl().fold(
+                onSuccess = { m3uUrl ->
                     if (!m3uUrl.isNullOrBlank()) {
-                        val epgUrl = constructEpgUrl(m3uUrl)
-                        epgRepository.fetchEpg(epgUrl)
+                        playlistRepository.loadPlaylistFromBackend().fold(
+                            onSuccess = { channels ->
+                                _uiState.value = _uiState.value.copy(channels = channels, isLoading = false)
+                                epgRepository.fetchEpg(constructEpgUrl(m3uUrl))
+                            },
+                            onFailure = { _uiState.value = _uiState.value.copy(isLoading = false, error = it.message) }
+                        )
                     }
-                    
-                    _uiState.value = _uiState.value.copy(isRefreshing = false)
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isRefreshing = false, isLoading = false)
-            }
+                },
+                onFailure = { _uiState.value = _uiState.value.copy(isLoading = false, error = it.message) }
+            )
         }
     }
 
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+    private fun constructEpgUrl(m3uUrl: String): String {
+        return try {
+            if (m3uUrl.contains("get.php")) {
+                m3uUrl.replace("get.php", "xmltv.php").split("&type=")[0].split("&output=")[0]
+            } else m3uUrl.replace(".m3u", ".xml").replace(".m3u8", ".xml")
+        } catch (e: Exception) { m3uUrl }
     }
+
+    fun loadPlaylistFromBackend() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            playlistRepository.loadPlaylistFromBackend().fold(
+                onSuccess = { channels -> _uiState.value = _uiState.value.copy(channels = channels, isLoading = false) },
+                onFailure = { _uiState.value = _uiState.value.copy(isLoading = false, error = it.message) }
+            )
+        }
+    }
+
+    fun getEpgForChannel(tvgId: String?, tvgName: String?): List<EpgProgram> {
+        return epgRepository.getProgramsForChannel(tvgId, tvgName)
+    }
+
+    fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
 }
