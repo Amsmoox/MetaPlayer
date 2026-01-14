@@ -35,7 +35,7 @@ fun MainMenuScreen(
     viewModel: PlaylistViewModel,
     onCategoryClick: (ChannelCategory) -> Unit,
     onChannelClick: (Channel) -> Unit,
-    onSettingsClick: () -> Unit, // Added parameter
+    onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -53,15 +53,27 @@ fun MainMenuScreen(
             .fillMaxSize()
             .background(Color(0xFF050505))
     ) {
+        // Background Glow
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(Color(0xFFFF9D00).copy(alpha = 0.03f), Color.Transparent),
+                        radius = 2000f
+                    )
+                )
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 64.dp),
-            verticalArrangement = Arrangement.Center
+                .padding(horizontal = 64.dp, vertical = 32.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // 1. TOP HEADER (Branding + Activation Status + Actions)
+            // 1. TOP HEADER
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -69,119 +81,263 @@ fun MainMenuScreen(
                     Image(
                         painter = painterResource(id = R.drawable.logo),
                         contentDescription = "Logo",
-                        modifier = Modifier.size(64.dp),
+                        modifier = Modifier.size(70.dp),
                         contentScale = ContentScale.Fit
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(
-                            text = "META PLAYER PRO",
-                            style = MaterialTheme.typography.displaySmall.copy(
+                            text = "META PLAYER",
+                            style = MaterialTheme.typography.headlineMedium.copy(
                                 fontWeight = FontWeight.Black,
-                                fontSize = 28.sp,
-                                letterSpacing = 2.sp
+                                fontSize = 32.sp,
+                                letterSpacing = (-1).sp
                             ),
                             color = Color.White
                         )
-                        Text(
-                            text = "ULTRA 4K STREAMING",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFFF9D00),
-                            letterSpacing = 2.sp
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(6.dp).background(Color(0xFFFF9D00)))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "ULTRA 4K EXPERIENCE",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray,
+                                letterSpacing = 2.sp
+                            )
+                        }
                     }
                 }
 
-                // Activation Status Badge
-                ActivationStatusBadge(
-                    activationType = uiState.activationType,
-                    daysRemaining = uiState.daysRemaining,
-                    isActive = uiState.isActive
-                )
-                
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ActivationStatusBadge(
+                        activationType = uiState.activationType,
+                        daysRemaining = uiState.daysRemaining,
+                        isActive = uiState.isActive
+                    )
                     IconButton(onClick = { viewModel.refreshPlaylist() }) {
                         Icon(Icons.Default.Refresh, "Refresh", tint = Color.Gray)
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
                     Button(
                         onClick = { viewModel.logout() },
                         shape = RectangleShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A1A1A))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A1A1A)),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
                     ) {
-                        Icon(Icons.Default.ExitToApp, null, tint = Color(0xFFFF5252), modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("LOGOUT", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                        Text("LOGOUT", color = Color(0xFFFF5252), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
-            // 2. QUICK RESUME ROW (If history exists)
-            if (recentChannels.isNotEmpty()) {
-                Text(
-                    text = "RESUME WATCHING",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 40.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(recentChannels) { channel ->
-                        QuickResumeItem(channel = channel, onClick = { onChannelClick(channel) })
-                    }
-                }
-            }
-
-            // 3. MAIN CATEGORY CARDS
+            // 2. PRO LAYOUT SECTION
             Row(
-                modifier = Modifier.fillMaxWidth().height(260.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(vertical = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                MenuCategoryCard(
+                // BIG LIVE TV CARD (The Focus)
+                MainFeatureCard(
                     title = "LIVE TV",
-                    subtitle = "TV CHANNELS",
+                    subtitle = "BROADCAST",
                     count = liveCount,
                     icon = Icons.Default.Tv,
-                    accentColor = Color(0xFFFF9D00),
-                    onClick = { onCategoryClick(ChannelCategory.LIVE_TV) },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1.8f),
+                    onClick = { onCategoryClick(ChannelCategory.LIVE_TV) }
                 )
 
-                MenuCategoryCard(
-                    title = "MOVIES",
-                    subtitle = "CINEMA VOD",
-                    count = moviesCount,
-                    icon = Icons.Default.Movie,
-                    accentColor = Color(0xFFFF9D00),
-                    onClick = { onCategoryClick(ChannelCategory.MOVIES) },
-                    modifier = Modifier.weight(1f)
-                )
+                // VERTICAL STACK FOR OTHERS
+                Column(
+                    modifier = Modifier.weight(1.2f),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    // MOVIES
+                    SecondaryActionCard(
+                        title = "MOVIES",
+                        icon = Icons.Default.Movie,
+                        count = moviesCount,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onCategoryClick(ChannelCategory.MOVIES) }
+                    )
+                    // SERIES
+                    SecondaryActionCard(
+                        title = "SERIES",
+                        icon = Icons.Default.VideoLibrary,
+                        count = seriesCount,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onCategoryClick(ChannelCategory.SERIES) }
+                    )
+                    // SETTINGS (Smallest / Different Style)
+                    SettingsMiniCard(
+                        onClick = onSettingsClick
+                    )
+                }
+            }
 
-                MenuCategoryCard(
-                    title = "SERIES",
-                    subtitle = "TV SHOWS",
-                    count = seriesCount,
-                    icon = Icons.Default.VideoLibrary,
-                    accentColor = Color(0xFFFF9D00),
-                    onClick = { onCategoryClick(ChannelCategory.SERIES) },
-                    modifier = Modifier.weight(1f)
-                )
+            // 3. QUICK RESUME (Bottom Bar)
+            if (recentChannels.isNotEmpty()) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "QUICK RESUME",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                        color = Color(0xFFFF9D00).copy(alpha = 0.7f),
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(recentChannels) { channel ->
+                            QuickResumeItem(channel = channel, onClick = { onChannelClick(channel) })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
-                MenuCategoryCard(
-                    title = "SETTINGS",
-                    subtitle = "APP INFO",
-                    count = 0,
-                    icon = Icons.Default.Settings,
-                    accentColor = Color(0xFF9E9E9E),
-                    onClick = onSettingsClick,
-                    modifier = Modifier.weight(0.6f), // Smaller card
-                    showCount = false
+@Composable
+private fun MainFeatureCard(
+    title: String,
+    subtitle: String,
+    count: Int,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .background(Color(0xFF0D0D0D), RectangleShape)
+            .border(2.dp, Brush.linearGradient(listOf(Color(0xFFFF9D00), Color.Transparent)), RectangleShape)
+            .clickable { onClick() }
+    ) {
+        // Large Background Icon
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .size(280.dp)
+                .offset(x = 60.dp, y = 60.dp),
+            tint = Color(0xFFFF9D00).copy(alpha = 0.05f)
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFFFF9D00),
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 2.sp
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.displayMedium.copy(
+                        fontWeight = FontWeight.Black,
+                        fontSize = 56.sp
+                    ),
+                    color = Color.White
+                )
+            }
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color(0xFFFF9D00))
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = "$count CHANNELS AVAILABLE",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SecondaryActionCard(
+    title: String,
+    icon: ImageVector,
+    count: Int,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color(0xFF0D0D0D), RectangleShape)
+            .border(1.dp, Color(0xFF1A1A1A), RectangleShape)
+            .clickable { onClick() }
+            .padding(24.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(50.dp)
+                .background(Color(0xFF151515))
+                .padding(12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(imageVector = icon, contentDescription = null, tint = Color.White)
+        }
+        Spacer(modifier = Modifier.width(20.dp))
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                color = Color.White
+            )
+            Text(
+                text = "$count ITEMS",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        Icon(Icons.Default.ChevronRight, null, tint = Color.DarkGray)
+    }
+}
+
+@Composable
+private fun SettingsMiniCard(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(60.dp)
+            .background(Brush.horizontalGradient(listOf(Color(0xFF1A1A1A), Color(0xFF0D0D0D))))
+            .clickable { onClick() }
+            .padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Settings, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = "SYSTEM SETTINGS",
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+            color = Color.White
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Text(
+            text = "INFO",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFFFF9D00)
+        )
     }
 }
 
@@ -193,40 +349,21 @@ private fun ActivationStatusBadge(
 ) {
     val statusText = when {
         !isActive -> "EXPIRED"
-        activationType == "LIFETIME" -> "LIFETIME ACTIVE"
-        activationType == "YEARLY" -> "YEARLY ACTIVE (${daysRemaining ?: 0} days left)"
-        activationType == "FREE_TRIAL" -> "TRIAL (${daysRemaining ?: 0} days left)"
-        else -> "ACTIVE"
+        activationType == "LIFETIME" -> "LIFETIME"
+        else -> "${daysRemaining ?: 0} DAYS"
     }
+    val statusColor = if (isActive) Color(0xFFFF9D00) else Color(0xFFFF5252)
 
-    val statusColor = when {
-        !isActive -> Color(0xFFFF5252)
-        activationType == "LIFETIME" -> Color(0xFF4CAF50)
-        activationType == "YEARLY" -> Color(0xFFFF9D00)
-        else -> Color(0xFF2196F3)
-    }
-
-    Box(
+    Row(
         modifier = Modifier
-            .border(1.dp, statusColor.copy(alpha = 0.5f), RectangleShape)
-            .background(statusColor.copy(alpha = 0.1f))
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .background(Color(0xFF1A1A1A))
+            .border(1.dp, statusColor.copy(alpha = 0.3f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .background(statusColor, RectangleShape)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.sp
-            )
-        }
+        Box(modifier = Modifier.size(6.dp).background(statusColor))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = statusText, color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black)
     }
 }
 
@@ -234,75 +371,31 @@ private fun ActivationStatusBadge(
 private fun QuickResumeItem(channel: Channel, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .width(140.dp)
-            .height(80.dp)
-            .background(Color(0xFF0D0D0D), RectangleShape)
-            .border(1.dp, Color(0xFF1A1A1A), RectangleShape)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        if (!channel.logo.isNullOrBlank()) {
-            AsyncImage(
-                model = channel.logo,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))))
-        )
-        Text(
-            text = channel.name,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(4.dp),
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun MenuCategoryCard(
-    title: String,
-    subtitle: String,
-    count: Int,
-    icon: ImageVector,
-    accentColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    showCount: Boolean = true
-) {
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .background(Color(0xFF0D0D0D), RectangleShape)
-            .border(1.dp, Color(0xFF1A1A1A), RectangleShape)
+            .width(160.dp)
+            .height(50.dp)
+            .background(Color(0xFF0D0D0D))
+            .border(1.dp, Color(0xFF1A1A1A))
             .clickable { onClick() }
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.5f)
-                .background(Brush.verticalGradient(listOf(accentColor.copy(alpha = 0.1f), Color.Transparent))),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(56.dp), tint = accentColor)
-        }
-
-        Column(
-            modifier = Modifier.fillMaxSize().padding(20.dp),
-            verticalArrangement = Arrangement.Bottom
-        ) {
-            Text(text = subtitle, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = accentColor, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-            Text(text = title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black), color = Color.White)
-            if (showCount) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "$count ITEMS", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = Color.Gray)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (!channel.logo.isNullOrBlank()) {
+                AsyncImage(
+                    model = channel.logo,
+                    contentDescription = null,
+                    modifier = Modifier.size(30.dp),
+                    contentScale = ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.width(10.dp))
             }
+            Text(
+                text = channel.name,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.LightGray,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
