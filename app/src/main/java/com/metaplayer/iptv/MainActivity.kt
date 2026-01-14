@@ -15,6 +15,7 @@ import com.metaplayer.iptv.data.model.ChannelCategory
 import com.metaplayer.iptv.presentation.ui.screens.CategoryChannelsScreen
 import com.metaplayer.iptv.presentation.ui.screens.PlaylistScreen
 import com.metaplayer.iptv.presentation.ui.screens.PlayerScreen
+import com.metaplayer.iptv.presentation.ui.screens.SettingsScreen
 import com.metaplayer.iptv.presentation.ui.theme.MetaPlayerTheme
 import com.metaplayer.iptv.presentation.viewmodel.PlaylistViewModel
 import com.metaplayer.iptv.presentation.viewmodel.PlayerViewModel
@@ -48,6 +49,9 @@ class MainActivity : ComponentActivity() {
                                     playerViewModel.playChannel(channel)
                                     navController.navigate("player")
                                 },
+                                onSettingsClick = {
+                                    navController.navigate("settings")
+                                },
                                 onExit = {
                                     finishAffinity()
                                 }
@@ -68,7 +72,7 @@ class MainActivity : ComponentActivity() {
                                 category = category,
                                 channels = channels,
                                 viewModel = playerViewModel,
-                                playlistViewModel = playlistViewModel, // Pass for real EPG
+                                playlistViewModel = playlistViewModel,
                                 onChannelClick = { channel ->
                                     playerViewModel.playChannel(channel)
                                     navController.navigate("player")
@@ -89,6 +93,13 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 navController.popBackStack()
                             }
+                        }
+
+                        composable("settings") {
+                            SettingsScreen(
+                                viewModel = playlistViewModel,
+                                onBackClick = { navController.popBackStack() }
+                            )
                         }
                     }
                 }

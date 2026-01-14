@@ -36,6 +36,7 @@ fun PlaylistScreen(
     viewModel: PlaylistViewModel,
     onCategoryClick: (ChannelCategory) -> Unit,
     onChannelClick: (Channel) -> Unit, // Added for Quick Resume
+    onSettingsClick: () -> Unit, // New parameter
     onExit: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -109,7 +110,8 @@ fun PlaylistScreen(
                         channels = uiState.channels,
                         viewModel = viewModel,
                         onCategoryClick = onCategoryClick,
-                        onChannelClick = onChannelClick
+                        onChannelClick = onChannelClick,
+                        onSettingsClick = onSettingsClick // Pass to MainMenuScreen
                     )
                 }
             }
@@ -142,7 +144,7 @@ private fun ExitConfirmationDialog(
                     modifier = Modifier.size(100.dp).padding(bottom = 24.dp)
                 )
 
-            Text(
+                Text(
                     text = "OH NO! LEAVING?",
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Black,
@@ -271,18 +273,19 @@ private fun UniqueProNoPlaylistScreen(
                         .fillMaxWidth()
                         .padding(bottom = 32.dp)
                 ) {
+                    val daysText = if (daysRemaining != null) "$daysRemaining days left" else "Checking status..."
                     val statusText = when (activationType) {
                         "LIFETIME" -> "LIFETIME ACTIVE"
-                        "YEARLY" -> "YEARLY ACTIVE (${daysRemaining ?: 0} days left)"
-                        "FREE_TRIAL" -> "FREE TRIAL (${daysRemaining ?: 0} days left)"
-                        else -> "DEVICE ACTIVE (${daysRemaining ?: 0} days left)"
+                        "YEARLY" -> "YEARLY ACTIVE ($daysText)"
+                        "FREE_TRIAL" -> "FREE TRIAL ($daysText)"
+                        else -> "DEVICE ACTIVE ($daysText)"
                     }
                     val statusColor = if (activationType == "LIFETIME") Color(0xFF4CAF50) else Color(0xFFFF9D00)
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(6.dp).background(statusColor))
                         Spacer(modifier = Modifier.width(8.dp))
-                    Text(
+                        Text(
                             text = statusText,
                             style = MaterialTheme.typography.labelLarge,
                             color = statusColor,
@@ -314,11 +317,11 @@ private fun UniqueProNoPlaylistScreen(
                             style = MaterialTheme.typography.titleSmall,
                             color = Color.White,
                             fontWeight = FontWeight.Bold
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -376,8 +379,8 @@ private fun UniqueProNoPlaylistScreen(
                     )
 
                     Spacer(modifier = Modifier.height(32.dp))
-            
-            Text(
+
+                    Text(
                         text = "META PLAYER PRO",
                         style = MaterialTheme.typography.headlineSmall,
                         color = Color.White,
@@ -385,7 +388,7 @@ private fun UniqueProNoPlaylistScreen(
                     )
                     Text(
                         text = "Experience the best 4K streaming\nquality on your device.",
-                style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = Color.Gray,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 12.dp)
@@ -534,7 +537,7 @@ private fun ExpiredScreen(
                     letterSpacing = 2.sp
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                    Text(
+                Text(
                     text = macAddress.uppercase(),
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,

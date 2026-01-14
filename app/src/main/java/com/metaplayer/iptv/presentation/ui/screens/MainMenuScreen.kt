@@ -35,6 +35,7 @@ fun MainMenuScreen(
     viewModel: PlaylistViewModel,
     onCategoryClick: (ChannelCategory) -> Unit,
     onChannelClick: (Channel) -> Unit,
+    onSettingsClick: () -> Unit, // Added parameter
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -136,7 +137,7 @@ fun MainMenuScreen(
 
             // 3. MAIN CATEGORY CARDS
             Row(
-                modifier = Modifier.fillMaxWidth().height(320.dp),
+                modifier = Modifier.fillMaxWidth().height(260.dp),
                 horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 MenuCategoryCard(
@@ -167,6 +168,17 @@ fun MainMenuScreen(
                     accentColor = Color(0xFFFF9D00),
                     onClick = { onCategoryClick(ChannelCategory.SERIES) },
                     modifier = Modifier.weight(1f)
+                )
+
+                MenuCategoryCard(
+                    title = "SETTINGS",
+                    subtitle = "APP INFO",
+                    count = 0,
+                    icon = Icons.Default.Settings,
+                    accentColor = Color(0xFF9E9E9E),
+                    onClick = onSettingsClick,
+                    modifier = Modifier.weight(0.6f), // Smaller card
+                    showCount = false
                 )
             }
         }
@@ -261,7 +273,8 @@ private fun MenuCategoryCard(
     icon: ImageVector,
     accentColor: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showCount: Boolean = true
 ) {
     Box(
         modifier = modifier
@@ -286,8 +299,10 @@ private fun MenuCategoryCard(
         ) {
             Text(text = subtitle, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = accentColor, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
             Text(text = title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black), color = Color.White)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "$count ITEMS", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = Color.Gray)
+            if (showCount) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = "$count ITEMS", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = Color.Gray)
+            }
         }
     }
 }
