@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.wifi.WifiManager
 import android.provider.Settings
 import java.net.NetworkInterface
+import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.*
 
@@ -37,8 +38,8 @@ object DeviceManager {
             return realMac
         }
         
-        // Generate a new MAC address
-        val generatedMac = generateMacAddress(context)
+        // Generate a deterministic MAC address
+        val generatedMac = generateDeterministicMacAddress(context)
         prefs.edit().putString(KEY_MAC_ADDRESS, generatedMac).apply()
         return generatedMac
     }
@@ -91,28 +92,45 @@ object DeviceManager {
     }
     
     /**
-     * Generate a random MAC address in format XX:XX:XX:XX:XX:XX
-     * Uses Android ID as seed for consistency across app reinstalls.
+     * Generates a deterministic MAC address based on Android ID.
+     * This ensures the same MAC is generated for the same device even after reinstall.
      */
-    private fun generateMacAddress(context: Context? = null): String {
-        val random = SecureRandom()
-        
-        // Use Android ID as seed for consistency if context is available
-        if (context != null) {
-            try {
-                val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-                if (!androidId.isNullOrBlank()) {
-                    // Seed with Android ID hash for consistency
-                    random.setSeed(androidId.hashCode().toLong())
-                }
-            } catch (e: Exception) {
-                // If we can't get Android ID, use default random
+    private fun generateDeterministicMacAddress(context: Context): String {
+        return try {
+            val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+            if (androidId.isNullOrBlank()) {
+                return generateRandomMacAddress()
             }
+
+            // Create a SHA-256 hash of the Android ID
+            val digest = MessageDigest.getInstance("SHA-256")
+            val hash = digest.digest(androidId.toByteArray(Charsets.UTF_8))
+            
+            // Use the first 6 bytes for the MAC address
+            val macBytes = ByteArray(6)
+            System.arraycopy(hash, 0, macBytes, 0, 6)
+            
+            formatMacAddress(macBytes)
+        } catch (e: Exception) {
+            generateRandomMacAddress()
         }
-        
+    }
+
+    /**
+     * Fallback to a truly random MAC address if Android ID is unavailable.
+     */
+    private fun generateRandomMacAddress(): String {
+        val random = SecureRandom()
         val macBytes = ByteArray(6)
         random.nextBytes(macBytes)
-        
+        return formatMacAddress(macBytes)
+    }
+
+    /**
+     * Formats byte array into XX:XX:XX:XX:XX:XX format.
+     * Also sets the locally administered bit and clears the multicast bit.
+     */
+    private fun formatMacAddress(macBytes: ByteArray): String {
         // Set locally administered bit (second least significant bit of first octet)
         macBytes[0] = (macBytes[0].toInt() or 0x02).toByte()
         // Clear multicast bit (least significant bit of first octet)
@@ -120,12 +138,7 @@ object DeviceManager {
         
         return String.format(
             "%02X:%02X:%02X:%02X:%02X:%02X",
-            macBytes[0],
-            macBytes[1],
-            macBytes[2],
-            macBytes[3],
-            macBytes[4],
-            macBytes[5]
+            macBytes[0], macBytes[1], macBytes[2], macBytes[3], macBytes[4], macBytes[5]
         )
     }
     

@@ -82,7 +82,7 @@ class DeviceRepository(private val context: Context) {
             val deviceInfo = getDeviceInfo()
             deviceInfo.fold(
                 onSuccess = { info ->
-                    if (info.m3u_url.isNotBlank()) {
+                    if (!info.m3u_url.isNullOrBlank()) {
                         Result.success(info.m3u_url)
                     } else {
                         Result.failure(Exception("M3U URL not set for this device"))
@@ -92,6 +92,52 @@ class DeviceRepository(private val context: Context) {
                     Result.failure(error)
                 }
             )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Track device activity (heartbeat).
+     */
+    suspend fun trackActivity(): Result<DeviceActivityResponse> = withContext(Dispatchers.IO) {
+        try {
+            val macAddress = DeviceManager.getMacAddress(context)
+            val response = api.trackActivity(macAddress)
+            
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                Result.failure(Exception("Failed to track activity: $errorBody"))
+            }
+        } catch (e: HttpException) {
+            Result.failure(Exception("HTTP error: ${e.code()} - ${e.message()}"))
+        } catch (e: IOException) {
+            Result.failure(Exception("Network error: ${e.message}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Get device activation status.
+     */
+    suspend fun getActivationStatus(): Result<DeviceStatusResponse> = withContext(Dispatchers.IO) {
+        try {
+            val macAddress = DeviceManager.getMacAddress(context)
+            val response = api.getDeviceStatus(macAddress)
+            
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                Result.failure(Exception("Failed to get activation status: $errorBody"))
+            }
+        } catch (e: HttpException) {
+            Result.failure(Exception("HTTP error: ${e.code()} - ${e.message()}"))
+        } catch (e: IOException) {
+            Result.failure(Exception("Network error: ${e.message}"))
         } catch (e: Exception) {
             Result.failure(e)
         }

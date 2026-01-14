@@ -1,5 +1,6 @@
 package com.metaplayer.iptv.presentation.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,11 +18,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.metaplayer.iptv.R
 import com.metaplayer.iptv.data.model.Channel
 import com.metaplayer.iptv.data.model.ChannelCategory
 import com.metaplayer.iptv.presentation.viewmodel.PlaylistViewModel
@@ -29,9 +32,9 @@ import com.metaplayer.iptv.presentation.viewmodel.PlaylistViewModel
 @Composable
 fun MainMenuScreen(
     channels: List<Channel>,
-    viewModel: PlaylistViewModel, // Added ViewModel
+    viewModel: PlaylistViewModel,
     onCategoryClick: (ChannelCategory) -> Unit,
-    onChannelClick: (Channel) -> Unit, // For quick resume
+    onChannelClick: (Channel) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -55,29 +58,45 @@ fun MainMenuScreen(
                 .padding(horizontal = 64.dp),
             verticalArrangement = Arrangement.Center
         ) {
-            // 1. TOP HEADER (Branding + Actions)
+            // 1. TOP HEADER (Branding + Activation Status + Actions)
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
-                    Text(
-                        text = "META PLAYER PRO",
-                        style = MaterialTheme.typography.displaySmall.copy(
-                            fontWeight = FontWeight.Black,
-                            fontSize = 28.sp,
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        painter = painterResource(id = R.drawable.logo),
+                        contentDescription = "Logo",
+                        modifier = Modifier.size(64.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "META PLAYER PRO",
+                            style = MaterialTheme.typography.displaySmall.copy(
+                                fontWeight = FontWeight.Black,
+                                fontSize = 28.sp,
+                                letterSpacing = 2.sp
+                            ),
+                            color = Color.White
+                        )
+                        Text(
+                            text = "ULTRA 4K STREAMING",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFFF9D00),
                             letterSpacing = 2.sp
-                        ),
-                        color = Color.White
-                    )
-                    Text(
-                        text = "ULTRA 4K STREAMING",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFFFF9D00),
-                        letterSpacing = 2.sp
-                    )
+                        )
+                    }
                 }
+
+                // Activation Status Badge
+                ActivationStatusBadge(
+                    activationType = uiState.activationType,
+                    daysRemaining = uiState.daysRemaining,
+                    isActive = uiState.isActive
+                )
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { viewModel.refreshPlaylist() }) {
@@ -150,6 +169,51 @@ fun MainMenuScreen(
                     modifier = Modifier.weight(1f)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ActivationStatusBadge(
+    activationType: String?,
+    daysRemaining: Int?,
+    isActive: Boolean
+) {
+    val statusText = when {
+        !isActive -> "EXPIRED"
+        activationType == "LIFETIME" -> "LIFETIME ACTIVE"
+        activationType == "YEARLY" -> "YEARLY ACTIVE (${daysRemaining ?: 0} days left)"
+        activationType == "FREE_TRIAL" -> "TRIAL (${daysRemaining ?: 0} days left)"
+        else -> "ACTIVE"
+    }
+
+    val statusColor = when {
+        !isActive -> Color(0xFFFF5252)
+        activationType == "LIFETIME" -> Color(0xFF4CAF50)
+        activationType == "YEARLY" -> Color(0xFFFF9D00)
+        else -> Color(0xFF2196F3)
+    }
+
+    Box(
+        modifier = Modifier
+            .border(1.dp, statusColor.copy(alpha = 0.5f), RectangleShape)
+            .background(statusColor.copy(alpha = 0.1f))
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(statusColor, RectangleShape)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp
+            )
         }
     }
 }

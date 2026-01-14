@@ -47,6 +47,9 @@ class MainActivity : ComponentActivity() {
                                 onChannelClick = { channel ->
                                     playerViewModel.playChannel(channel)
                                     navController.navigate("player")
+                                },
+                                onExit = {
+                                    finishAffinity()
                                 }
                             )
                         }

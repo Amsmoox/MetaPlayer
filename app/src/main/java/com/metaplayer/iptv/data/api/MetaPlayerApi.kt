@@ -42,4 +42,29 @@ interface MetaPlayerApi {
     suspend fun refreshPlaylist(
         @Path("mac_address") macAddress: String
     ): Response<RegisterDeviceResponse>
+    
+    /**
+     * Track device activity (heartbeat).
+     */
+    @POST("api/devices/{mac_address}/activity/")
+    suspend fun trackActivity(
+        @Path("mac_address") macAddress: String
+    ): Response<DeviceActivityResponse>
+    
+    /**
+     * Get device activation status.
+     */
+    @GET("api/devices/{mac_address}/status/")
+    suspend fun getDeviceStatus(
+        @Path("mac_address") macAddress: String
+    ): Response<DeviceStatusResponse>
+    
+    /**
+     * Activate device (yearly or lifetime) - Admin only.
+     */
+    @POST("api/devices/{mac_address}/activate/")
+    suspend fun activateDevice(
+        @Path("mac_address") macAddress: String,
+        @Body request: ActivateDeviceRequest
+    ): Response<DeviceStatusResponse>
 }
