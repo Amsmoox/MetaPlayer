@@ -78,12 +78,26 @@ fun MainMenuScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(
-                        painter = painterResource(id = R.drawable.logo),
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(70.dp),
-                        contentScale = ContentScale.Fit
-                    )
+                    // Logo with subtle white shadow/glow
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(70.dp)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(Color.White.copy(alpha = 0.12f), Color.Transparent),
+                                    radius = 120f
+                                )
+                            )
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.logo),
+                            contentDescription = "Logo",
+                            modifier = Modifier.size(56.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                    
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(
@@ -323,8 +337,7 @@ private fun SettingsMiniCard(onClick: () -> Unit) {
             .background(Brush.horizontalGradient(listOf(Color(0xFF1A1A1A), Color(0xFF0D0D0D))))
             .clickable { onClick() }
             .padding(horizontal = 24.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+        verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Settings, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Text(

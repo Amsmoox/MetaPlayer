@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 
 data class PlaylistUiState(
     val channels: List<Channel> = emptyList(),
@@ -55,11 +56,38 @@ class PlaylistViewModel(
             favoriteUrls = favoritesRepository.getFavorites(),
             historyUrls = historyRepository.getHistory()
         )
-        refreshAll()
+        // Load from cache on startup
+        initialLoad()
         startActivityTracking()
     }
 
-    fun refreshAll() {
+    private fun initialLoad() {
+        viewModelScope.launch {
+            val cacheFile = File(getApplication<Application>().filesDir, "playlist_cache.m3u")
+            if (cacheFile.exists() && cacheFile.length() > 0) {
+                _uiState.value = _uiState.value.copy(isLoading = true)
+                loadPlaylistInternal("", forceRefresh = false)
+                updateDeviceInfoSilently()
+            } else {
+                refreshAll(forceRefresh = false)
+            }
+        }
+    }
+
+    private suspend fun updateDeviceInfoSilently() {
+        deviceRepository.getDeviceInfo().fold(
+            onSuccess = { info ->
+                updateActivationFromDeviceInfo(info)
+                _uiState.value = _uiState.value.copy(
+                    m3uUrlFromBackend = info.m3u_url,
+                    deviceRegistered = true
+                )
+            },
+            onFailure = { }
+        )
+    }
+
+    fun refreshAll(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             
@@ -75,7 +103,7 @@ class PlaylistViewModel(
                     if (!info.is_active || (info.activation_status?.expired == true)) {
                         _uiState.value = _uiState.value.copy(isLoading = false)
                     } else if (!m3uUrl.isNullOrBlank()) {
-                        loadPlaylistInternal(m3uUrl)
+                        loadPlaylistInternal(m3uUrl, forceRefresh)
                     } else {
                         _uiState.value = _uiState.value.copy(isLoading = false)
                     }
@@ -104,11 +132,17 @@ class PlaylistViewModel(
         )
     }
 
-    private suspend fun loadPlaylistInternal(m3uUrl: String) {
-        playlistRepository.loadPlaylistFromBackend().fold(
+    private suspend fun loadPlaylistInternal(m3uUrl: String, forceRefresh: Boolean) {
+        playlistRepository.loadPlaylistFromBackend(forceRefresh).fold(
             onSuccess = { channels ->
                 _uiState.value = _uiState.value.copy(channels = channels, isLoading = false)
-                epgRepository.fetchEpg(constructEpgUrl(m3uUrl))
+                if (m3uUrl.isNotBlank()) {
+                    epgRepository.fetchEpg(constructEpgUrl(m3uUrl))
+                } else {
+                    _uiState.value.m3uUrlFromBackend?.let {
+                        epgRepository.fetchEpg(constructEpgUrl(it))
+                    }
+                }
             },
             onFailure = { 
                 _uiState.value = _uiState.value.copy(isLoading = false, error = it.message)
@@ -145,7 +179,6 @@ class PlaylistViewModel(
                 )
             },
             onFailure = { 
-                // Fallback to heartbeat
                 deviceRepository.trackActivity()
             }
         )
@@ -159,7 +192,6 @@ class PlaylistViewModel(
         }
     }
 
-    // UPDATE PERSISTENT STATE
     fun updateNavigationState(group: String, channel: Channel?) {
         _uiState.value = _uiState.value.copy(
             lastSelectedGroup = group,
@@ -169,10 +201,8 @@ class PlaylistViewModel(
 
     fun logout() {
         viewModelScope.launch {
-            // Save activation status before resetting
+            // REMOVED clearCache() so the 41MB file stays on the phone after logout.
             val currentState = _uiState.value
-            
-            // Reset state but preserve activation info and device registration
             _uiState.value = PlaylistUiState(
                 macAddress = currentState.macAddress,
                 deviceRegistered = currentState.deviceRegistered,
@@ -182,8 +212,6 @@ class PlaylistViewModel(
                 isExpired = currentState.isExpired,
                 activationError = currentState.activationError
             )
-            
-            // Refresh activation status to get latest data from backend
             updateStatusSuspend()
         }
     }
@@ -221,11 +249,11 @@ class PlaylistViewModel(
     }
 
     fun loadM3UUrlFromBackend() {
-        refreshAll()
+        refreshAll(forceRefresh = true)
     }
 
     fun refreshPlaylist() {
-        refreshAll()
+        refreshAll(forceRefresh = true)
     }
 
     private fun constructEpgUrl(m3uUrl: String): String {

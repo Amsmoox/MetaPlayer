@@ -27,6 +27,8 @@
         android:theme="@style/Theme.MetaPlayer"
         android:usesCleartextTraffic="true"
         android:appCategory="video"
+        android:largeHeap="true"
+        android:hardwareAccelerated="true"
         tools:targetApi="31">
         
         <activity
@@ -42,7 +44,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             
-            <!-- CRITICAL: LEANBACK_LAUNCHER for TV Home Screen -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />

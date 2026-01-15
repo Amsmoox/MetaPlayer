@@ -10,13 +10,11 @@ import java.util.concurrent.TimeUnit
  * API Client configuration for MetaPlayer backend.
  */
 object ApiClient {
-    // Base URL - Change this based on your setup
-    // Android Emulator: http://10.0.2.2:8000
-    // Real Device: http://192.168.11.101:8000
     private const val BASE_URL = "http://10.0.2.2:8000/"
     
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        // Changed from BODY to BASIC to avoid logging every line of large M3U files
+        level = HttpLoggingInterceptor.Level.BASIC
     }
     
     private val okHttpClient = OkHttpClient.Builder()
@@ -34,9 +32,6 @@ object ApiClient {
     
     val api: MetaPlayerApi = retrofit.create(MetaPlayerApi::class.java)
     
-    /**
-     * Update base URL (for switching between emulator and real device).
-     */
     fun updateBaseUrl(newBaseUrl: String): MetaPlayerApi {
         val newRetrofit = Retrofit.Builder()
             .baseUrl(newBaseUrl)

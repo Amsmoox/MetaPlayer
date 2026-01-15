@@ -5,6 +5,9 @@ import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,10 +44,7 @@ fun LiveTvScreen(
 ) {
     val context = LocalContext.current
     val uiState by playlistViewModel.uiState.collectAsState()
-    
-    // UI reactive to EPG load status
     val epgLoaded by playlistViewModel.epgRepository.epgLoaded.collectAsState()
-    
     var searchQuery by remember { mutableStateOf("") }
     
     val groups = remember(channels, uiState.favoriteUrls, uiState.historyUrls) {
@@ -69,7 +69,6 @@ fun LiveTvScreen(
         mutableStateOf(uiState.lastSelectedChannel?.takeIf { filteredChannels.contains(it) } ?: filteredChannels.firstOrNull()) 
     }
 
-    // Refresh EPG data when epgLoaded state changes OR selectedChannel changes
     val currentEpg = remember(selectedChannel, epgLoaded) {
         playlistViewModel.getEpgForChannel(selectedChannel?.tvgId, selectedChannel?.tvgName)
     }
@@ -115,7 +114,6 @@ fun LiveTvScreen(
                         name = group, 
                         isSelected = selectedGroup == group,
                         icon = when(group) { "FAVORITES" -> Icons.Default.Star; "LAST SEEN" -> Icons.Default.History; else -> null },
-                        bgColor = when(group) { "FAVORITES" -> if (selectedGroup == group) Color(0xFFFF9D00).copy(alpha = 0.2f) else Color.Transparent; "LAST SEEN" -> if (selectedGroup == group) Color(0xFF333333) else Color.Transparent; else -> Color.Transparent },
                         onClick = { 
                             selectedGroup = group
                             selectedChannel = filteredChannels.firstOrNull()
@@ -172,7 +170,6 @@ fun LiveTvScreen(
                         }
                     }
                 } else if (selectedChannel != null) {
-                    // PROFESSIONAL FALLBACK
                     Column {
                         Text("STREAM INFORMATION", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(12.dp))
@@ -199,22 +196,59 @@ private fun StreamInfoLine(icon: ImageVector, label: String, value: String) {
 }
 
 @Composable
-private fun SpecialGroupItem(name: String, isSelected: Boolean, icon: ImageVector?, bgColor: Color, onClick: () -> Unit) {
-    Box(modifier = Modifier.fillMaxWidth().background(if (isSelected && icon == null) Color(0xFF1A1A1A) else bgColor).clickable { onClick() }.padding(horizontal = 16.dp, vertical = 10.dp)) {
+private fun SpecialGroupItem(name: String, isSelected: Boolean, icon: ImageVector?, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    
+    val backgroundColor = when {
+        isFocused -> Color(0xFFFF9D00).copy(alpha = 0.3f)
+        isSelected -> Color(0xFF1A1A1A)
+        else -> Color.Transparent
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(backgroundColor)
+            .border(if (isFocused) 1.dp else 0.dp, if (isFocused) Color(0xFFFF9D00) else Color.Transparent)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .focusable(interactionSource = interactionSource)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (icon != null) { Icon(imageVector = icon, contentDescription = null, tint = if (isSelected) Color(0xFFFF9D00) else Color.Gray, modifier = Modifier.size(14.dp)); Spacer(modifier = Modifier.width(12.dp)) }
-            Text(text = name, color = if (isSelected) Color.White else Color.Gray, style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), fontWeight = if (isSelected) FontWeight.Black else FontWeight.Normal)
+            if (icon != null) { 
+                Icon(imageVector = icon, contentDescription = null, tint = if (isSelected || isFocused) Color(0xFFFF9D00) else Color.Gray, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(12.dp)) 
+            }
+            Text(text = name, color = if (isSelected || isFocused) Color.White else Color.Gray, style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), fontWeight = if (isSelected || isFocused) FontWeight.Black else FontWeight.Normal)
         }
     }
 }
 
 @Composable
 private fun ChannelItem(channel: Channel, isSelected: Boolean, isFavorite: Boolean, onFavoriteToggle: () -> Unit, onClick: () -> Unit) {
-    Box(modifier = Modifier.fillMaxWidth().background(if (isSelected) Color(0xFF1A1A1A) else Color.Transparent).clickable { onClick() }.padding(horizontal = 16.dp, vertical = 10.dp)) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val backgroundColor = when {
+        isFocused -> Color(0xFFFF9D00).copy(alpha = 0.2f)
+        isSelected -> Color(0xFF1A1A1A)
+        else -> Color.Transparent
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(backgroundColor)
+            .border(if (isFocused) 1.dp else 0.dp, if (isFocused) Color(0xFFFF9D00) else Color.Transparent)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .focusable(interactionSource = interactionSource)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(imageVector = if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder, contentDescription = null, tint = if (isFavorite) Color(0xFFFF9D00) else Color.DarkGray, modifier = Modifier.size(16.dp).clickable { onFavoriteToggle() })
             Spacer(modifier = Modifier.width(8.dp))
-            Text(channel.name, color = if (isSelected) Color.White else Color.Gray, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp), fontWeight = if (isSelected) FontWeight.Black else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(channel.name, color = if (isSelected || isFocused) Color.White else Color.Gray, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp), fontWeight = if (isSelected || isFocused) FontWeight.Black else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
