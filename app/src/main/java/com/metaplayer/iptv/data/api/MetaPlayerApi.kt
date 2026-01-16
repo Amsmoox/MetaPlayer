@@ -27,21 +27,13 @@ interface MetaPlayerApi {
     ): Response<DeviceInfoResponse>
     
     /**
-     * Get M3U playlist for device (app parses locally).
+     * Get M3U playlist URL for device.
      */
     @GET("api/devices/{mac_address}/playlist.m3u")
-    suspend fun getPlaylist(
+    suspend fun getPlaylistUrl(
         @Path("mac_address") macAddress: String,
         @Query("refresh") refresh: Boolean = false
-    ): Response<ResponseBody>
-    
-    /**
-     * Force refresh playlist cache.
-     */
-    @POST("api/devices/{mac_address}/refresh/")
-    suspend fun refreshPlaylist(
-        @Path("mac_address") macAddress: String
-    ): Response<RegisterDeviceResponse>
+    ): Response<PlaylistResponse>
     
     /**
      * Track device activity (heartbeat).

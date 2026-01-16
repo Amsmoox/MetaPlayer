@@ -2,24 +2,31 @@ package com.metaplayer.iptv.player
 
 import android.content.Context
 import androidx.media3.common.C
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import com.metaplayer.iptv.data.api.ApiClient
 
 /**
  * Professional ExoPlayer configuration optimized for IPTV streaming
- * Supports: 4K, HDR, all qualities, adaptive bitrate
  */
 object PlayerConfig {
     
-    /**
-     * Creates a professional ExoPlayer instance optimized for high-quality streaming
-     */
     fun createPlayer(context: Context): ExoPlayer {
         val trackSelector = createTrackSelector(context)
         val loadControl = createLoadControl()
         
+        // Use our shared OkHttpClient with DNS-over-HTTPS for video playback
+        val dataSourceFactory = OkHttpDataSource.Factory(ApiClient.okHttpClient)
+            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+        
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(dataSourceFactory)
+        
         return ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
@@ -28,59 +35,33 @@ object PlayerConfig {
             .build()
     }
     
-    /**
-     * Track selector for optimal quality selection
-     * - Removes quality limits (allows 4K+)
-     * - Enables adaptive bitrate switching
-     * - Supports all codecs
-     */
     private fun createTrackSelector(context: Context): DefaultTrackSelector {
         val trackSelector = DefaultTrackSelector(context)
         val parameters = trackSelector.buildUponParameters()
-            // Quality settings
-            .setMaxVideoSizeSd() // Remove max limit
-            .setMaxVideoBitrate(Int.MAX_VALUE) // No bitrate limit
-            
-            // Codec support
-            .setPreferredVideoMimeType(null) // Allow all video formats
-            .setPreferredAudioMimeType(null) // Allow all audio formats
-            
-            // Adaptive streaming
+            .setMaxVideoSizeSd()
+            .setMaxVideoBitrate(Int.MAX_VALUE)
             .setAllowVideoMixedMimeTypeAdaptiveness(true)
             .setAllowVideoNonSeamlessAdaptiveness(true)
             .setAllowAudioMixedMimeTypeAdaptiveness(true)
-            
-            // Prefer higher quality
-            .setForceHighestSupportedBitrate(false) // Allow adaptive
-            .setForceLowestBitrate(false)
-            
             .build()
         
         trackSelector.parameters = parameters
         return trackSelector
     }
     
-    /**
-     * Load control for optimal buffering
-     * - 15 second minimum buffer for smooth playback
-     * - 50 second maximum buffer for 4K streams
-     * - Fast startup (2.5 seconds)
-     * - Quick rebuffering (5 seconds)
-     */
     private fun createLoadControl(): DefaultLoadControl {
         return DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                15000,  // minBufferMs: 15 seconds before playback starts
-                50000,  // maxBufferMs: 50 seconds max buffer (critical for 4K)
-                2500,   // bufferForPlaybackMs: 2.5 seconds for playback start
-                5000    // bufferForPlaybackAfterRebufferMs: 5 seconds after rebuffer
+                15000, 
+                50000, 
+                2500,  
+                5000   
             )
             .setBackBuffer(
-                10000,  // Keep 10 seconds of back buffer
-                true    // Retain back buffer after loading
+                10000, 
+                true   
             )
-            .setTargetBufferBytes(C.LENGTH_UNSET) // No target buffer size limit
-            .setPrioritizeTimeOverSizeThresholds(true) // Prioritize time-based buffering
+            .setPrioritizeTimeOverSizeThresholds(true)
             .build()
     }
 }

@@ -34,4 +34,8 @@ class HistoryRepository(context: Context) {
         
         prefs.edit().putString("watched_urls", gson.toJson(trimmedHistory)).apply()
     }
+
+    fun clearHistory() {
+        prefs.edit().remove("watched_urls").apply()
+    }
 }

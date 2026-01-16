@@ -29,18 +29,15 @@ data class DeviceInfoResponse(
     val is_active: Boolean,
     val created_at: String,
     val last_seen: String,
-    val cache: CacheInfo,
     val activation_status: ActivationStatus? = null,
     val warning: String? = null,
     val message: String? = null
 )
 
-data class CacheInfo(
-    val has_cache: Boolean,
-    val cache_valid: Boolean,
-    val cache_updated: String?,
-    val cache_expires_in_hours: Int,
-    val cache_size_bytes: Long
+data class PlaylistResponse(
+    val m3u_url: String,
+    val mac_address: String,
+    val device_name: String? = null
 )
 
 data class ActivationStatus(

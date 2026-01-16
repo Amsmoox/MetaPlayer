@@ -56,13 +56,17 @@ fun LiveTvScreen(
     var selectedGroup by remember { mutableStateOf(uiState.lastSelectedGroup) }
     
     val filteredChannels = remember(selectedGroup, searchQuery, channels, uiState.favoriteUrls, uiState.historyUrls) {
-        val baseList = when (selectedGroup) {
-            "FAVORITES" -> channels.filter { uiState.favoriteUrls.contains(it.url) }
-            "LAST SEEN" -> uiState.historyUrls.mapNotNull { url -> channels.find { it.url == url } }
-            "ALL CHANNELS" -> channels
-            else -> channels.filter { it.group == selectedGroup }
+        // GLOBAL SEARCH LOGIC: If search query is not empty, ignore the selected group and search everything
+        if (searchQuery.isNotEmpty()) {
+            channels.filter { it.name.contains(searchQuery, ignoreCase = true) }
+        } else {
+            when (selectedGroup) {
+                "FAVORITES" -> channels.filter { uiState.favoriteUrls.contains(it.url) }
+                "LAST SEEN" -> uiState.historyUrls.mapNotNull { url -> channels.find { it.url == url } }
+                "ALL CHANNELS" -> channels
+                else -> channels.filter { it.group == selectedGroup }
+            }
         }
-        if (searchQuery.isEmpty()) baseList else baseList.filter { it.name.contains(searchQuery, ignoreCase = true) }
     }
     
     var selectedChannel by remember { 
@@ -102,19 +106,27 @@ fun LiveTvScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Search, null, tint = Color.Gray, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    BasicTextField(value = searchQuery, onValueChange = { searchQuery = it }, textStyle = TextStyle(color = Color.White, fontSize = 12.sp), cursorBrush = SolidColor(Color(0xFFFF9D00)), modifier = Modifier.fillMaxWidth())
+                    BasicTextField(
+                        value = searchQuery, 
+                        onValueChange = { searchQuery = it }, 
+                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp), 
+                        cursorBrush = SolidColor(Color(0xFFFF9D00)), 
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
             
             Spacer(modifier = Modifier.height(16.dp))
             
+            // Only show groups if not searching
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(groups) { group ->
                     SpecialGroupItem(
                         name = group, 
-                        isSelected = selectedGroup == group,
+                        isSelected = if (searchQuery.isEmpty()) selectedGroup == group else false,
                         icon = when(group) { "FAVORITES" -> Icons.Default.Star; "LAST SEEN" -> Icons.Default.History; else -> null },
                         onClick = { 
+                            searchQuery = "" // Clear search when a group is explicitly clicked
                             selectedGroup = group
                             selectedChannel = filteredChannels.firstOrNull()
                             playlistViewModel.updateNavigationState(group, selectedChannel)
@@ -126,7 +138,8 @@ fun LiveTvScreen(
 
         // CHANNELS
         Column(modifier = Modifier.width(240.dp).fillMaxHeight().background(Color(0xFF0D0D0D)).border(0.5.dp, Color(0xFF1A1A1A), RectangleShape)) {
-            Text("CHANNELS", modifier = Modifier.padding(16.dp), color = Color(0xFFFF9D00), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+            val titleText = if (searchQuery.isEmpty()) "CHANNELS" else "SEARCH RESULTS"
+            Text(titleText, modifier = Modifier.padding(16.dp), color = Color(0xFFFF9D00), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(filteredChannels) { channel ->
                     ChannelItem(
@@ -140,7 +153,10 @@ fun LiveTvScreen(
                                 onChannelClick(channel)
                             } else {
                                 selectedChannel = channel
-                                playlistViewModel.updateNavigationState(selectedGroup, channel)
+                                // Don't update global state with search results
+                                if (searchQuery.isEmpty()) {
+                                    playlistViewModel.updateNavigationState(selectedGroup, channel)
+                                }
                             }
                         }
                     )

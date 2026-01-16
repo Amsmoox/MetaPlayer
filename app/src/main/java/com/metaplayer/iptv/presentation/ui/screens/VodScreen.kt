@@ -46,17 +46,21 @@ fun VodScreen(
         listOf("FAVORITES", "LAST SEEN", "ALL CONTENT") + channels.mapNotNull { it.group }.distinct().sorted()
     }
     
-    // PERSISTENCE: Restore from ViewModel
     var selectedGroup by remember { mutableStateOf(uiState.lastSelectedGroup) }
     
     val filteredChannels = remember(selectedGroup, searchQuery, channels, uiState.favoriteUrls, uiState.historyUrls) {
-        val baseList = when (selectedGroup) {
-            "FAVORITES" -> channels.filter { uiState.favoriteUrls.contains(it.url) }
-            "LAST SEEN" -> uiState.historyUrls.mapNotNull { url -> channels.find { it.url == url } }
-            "ALL CONTENT" -> channels
-            else -> channels.filter { it.group == selectedGroup }
+        // GLOBAL SEARCH LOGIC: If search query is not empty, ignore the selected group and search everything
+        if (searchQuery.isNotEmpty()) {
+            channels.filter { it.name.contains(searchQuery, ignoreCase = true) }
+        } else {
+            val baseList = when (selectedGroup) {
+                "FAVORITES" -> channels.filter { uiState.favoriteUrls.contains(it.url) }
+                "LAST SEEN" -> uiState.historyUrls.mapNotNull { url -> channels.find { it.url == url } }
+                "ALL CONTENT" -> channels
+                else -> channels.filter { it.group == selectedGroup }
+            }
+            baseList
         }
-        if (searchQuery.isEmpty()) baseList else baseList.filter { it.name.contains(searchQuery, ignoreCase = true) }
     }
 
     Row(modifier = Modifier.fillMaxSize().background(Color(0xFF050505))) {
@@ -74,7 +78,13 @@ fun VodScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Search, null, tint = Color.Gray, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    BasicTextField(value = searchQuery, onValueChange = { searchQuery = it }, textStyle = TextStyle(color = Color.White, fontSize = 12.sp), cursorBrush = SolidColor(Color(0xFFFF9D00)), modifier = Modifier.fillMaxWidth())
+                    BasicTextField(
+                        value = searchQuery, 
+                        onValueChange = { searchQuery = it }, 
+                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp), 
+                        cursorBrush = SolidColor(Color(0xFFFF9D00)), 
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
 
@@ -84,10 +94,11 @@ fun VodScreen(
                 items(groups) { group ->
                     VodGroupItem(
                         name = group, 
-                        isSelected = selectedGroup == group,
+                        isSelected = if (searchQuery.isEmpty()) selectedGroup == group else false,
                         icon = when(group) { "FAVORITES" -> Icons.Default.Star; "LAST SEEN" -> Icons.Default.History; else -> null },
-                        bgColor = when(group) { "FAVORITES" -> if (selectedGroup == group) Color(0xFFFF9D00).copy(alpha = 0.2f) else Color.Transparent; "LAST SEEN" -> if (selectedGroup == group) Color(0xFF333333) else Color.Transparent; else -> Color.Transparent },
+                        bgColor = when(group) { "FAVORITES" -> if (selectedGroup == group && searchQuery.isEmpty()) Color(0xFFFF9D00).copy(alpha = 0.2f) else Color.Transparent; "LAST SEEN" -> if (selectedGroup == group && searchQuery.isEmpty()) Color(0xFF333333) else Color.Transparent; else -> Color.Transparent },
                         onClick = { 
+                            searchQuery = "" // Clear search when a group is clicked
                             selectedGroup = group 
                             playlistViewModel.updateNavigationState(group, null)
                         }
@@ -99,7 +110,8 @@ fun VodScreen(
         // GRID
         Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(horizontal = 20.dp, vertical = 20.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(text = selectedGroup.uppercase(), style = MaterialTheme.typography.headlineSmall.copy(fontSize = 20.sp), color = Color.White, fontWeight = FontWeight.Black)
+                val headerTitle = if (searchQuery.isEmpty()) selectedGroup.uppercase() else "SEARCH RESULTS"
+                Text(text = headerTitle, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 20.sp), color = Color.White, fontWeight = FontWeight.Black)
                 Text(text = "${filteredChannels.size} TITLES", style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp), color = Color.DarkGray, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(20.dp))
@@ -112,7 +124,10 @@ fun VodScreen(
                         onFavoriteToggle = { playlistViewModel.toggleFavorite(movie) },
                         onClick = { 
                             playlistViewModel.addToHistory(movie)
-                            playlistViewModel.updateNavigationState(selectedGroup, movie) // PERSIST SELECTION
+                            // Only update navigation state if not searching
+                            if (searchQuery.isEmpty()) {
+                                playlistViewModel.updateNavigationState(selectedGroup, movie)
+                            }
                             onMovieClick(movie) 
                         }
                     ) 

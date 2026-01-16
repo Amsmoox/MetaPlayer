@@ -8,10 +8,9 @@ import com.metaplayer.iptv.data.parser.M3UParser
 import com.metaplayer.iptv.data.util.DeviceManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import retrofit2.HttpException
+import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
-import java.io.IOException
 
 class PlaylistRepository(
     context: Context,
@@ -22,101 +21,96 @@ class PlaylistRepository(
     private val CACHE_FILE_NAME = "playlist_cache.m3u"
     private val TAG = "PlaylistRepository"
     
-    suspend fun loadPlaylistFromBackend(forceRefresh: Boolean = false): Result<List<Channel>> = withContext(Dispatchers.IO) {
+    // Reuse the global OkHttpClient from ApiClient which has DNS-over-HTTPS configured
+    private val httpClient = ApiClient.okHttpClient
+    
+    suspend fun loadPlaylistStreaming(
+        forceRefresh: Boolean,
+        onProgress: (Float) -> Unit,
+        onChannelsUpdated: (List<Channel>) -> Unit
+    ): Result<List<Channel>> = withContext(Dispatchers.IO) {
         val cacheFile = File(appContext.filesDir, CACHE_FILE_NAME)
         
-        Log.d(TAG, "=== Starting Playlist Load ===")
-        Log.d(TAG, "Target File: ${cacheFile.absolutePath}")
-        Log.d(TAG, "Parameters -> forceRefresh: $forceRefresh, File Exists: ${cacheFile.exists()}, File Size: ${cacheFile.length()} bytes")
+        if (forceRefresh) {
+            clearCache()
+        }
 
-        // 1. Try Cache First
+        // 1. If not forcing refresh and cache exists, parse cache streaming-style
         if (!forceRefresh && cacheFile.exists() && cacheFile.length() > 0) {
             try {
-                Log.d(TAG, "✅ Attempting to load from CACHE...")
-                val channels = parser.parseFromFile(cacheFile)
-                if (channels.isNotEmpty()) {
-                    Log.d(TAG, "🚀 CACHE SUCCESS: Loaded ${channels.size} channels. SKIPPING NETWORK.")
-                    return@withContext Result.success(channels)
-                } else {
-                    Log.w(TAG, "⚠️ CACHE WARNING: File is empty or has no valid channels.")
+                val channels = cacheFile.inputStream().use { stream ->
+                    parser.parseStreaming(stream, cacheFile.length(), onProgress, onChannelsUpdated)
                 }
+                if (channels.isNotEmpty()) return@withContext Result.success(channels)
             } catch (e: Exception) {
-                Log.e(TAG, "❌ CACHE ERROR: Parsing failed. Deleting cache.", e)
                 cacheFile.delete() 
             }
-        } else {
-            val reason = when {
-                forceRefresh -> "Force refresh requested by user"
-                !cacheFile.exists() -> "Cache file does not exist"
-                cacheFile.length() == 0L -> "Cache file is 0 bytes"
-                else -> "Unknown"
-            }
-            Log.d(TAG, "ℹ️ Skipping cache. Reason: $reason")
         }
 
         // 2. Fetch from Network
-        Log.d(TAG, "🌐 NETWORK: Fetching latest playlist from API...")
         try {
             val macAddress = DeviceManager.getMacAddress(appContext)
-            val response = api.getPlaylist(macAddress, refresh = forceRefresh)
+            val response = api.getPlaylistUrl(macAddress, refresh = forceRefresh)
             
             if (response.isSuccessful && response.body() != null) {
-                val tempFile = File(appContext.filesDir, "${CACHE_FILE_NAME}.tmp")
-                Log.d(TAG, "🌐 NETWORK: Downloading data to temporary file...")
+                val m3uUrl = response.body()!!.m3u_url
+                Log.d(TAG, "🌐 FETCHING M3U FROM: $m3uUrl")
                 
-                response.body()!!.byteStream().use { input ->
+                val request = Request.Builder()
+                    .url(m3uUrl)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+                    .build()
+                
+                val downloadResponse = httpClient.newCall(request).execute()
+                if (!downloadResponse.isSuccessful) return@withContext Result.failure(Exception("Download Error: ${downloadResponse.code}"))
+
+                val body = downloadResponse.body ?: return@withContext Result.failure(Exception("Empty body"))
+                val contentLength = body.contentLength()
+
+                // We write to a temporary file while parsing to update the cache
+                val tempFile = File(appContext.filesDir, "${CACHE_FILE_NAME}.tmp")
+                
+                // We use a custom stream that both writes to file and provides data to parser
+                val channels = body.byteStream().use { input ->
                     FileOutputStream(tempFile).use { output ->
-                        input.copyTo(output)
-                        output.flush()
-                        try { output.fd.sync() } catch (e: Exception) {} 
+                        val teeInputStream = object : java.io.InputStream() {
+                            override fun read(): Int {
+                                val b = input.read()
+                                if (b != -1) output.write(b)
+                                return b
+                            }
+                            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                                val n = input.read(b, off, len)
+                                if (n != -1) output.write(b, off, n)
+                                return n
+                            }
+                        }
+                        parser.parseStreaming(teeInputStream, contentLength, onProgress, onChannelsUpdated)
                     }
                 }
                 
-                Log.d(TAG, "🌐 NETWORK: Download complete. Atomic swap to final cache file.")
-                if (tempFile.renameTo(cacheFile)) {
-                    Log.d(TAG, "✅ CACHE UPDATED: New size is ${cacheFile.length()} bytes.")
-                } else {
-                    tempFile.copyTo(cacheFile, overwrite = true)
-                    tempFile.delete()
-                }
-                
-                val channels = parser.parseFromFile(cacheFile)
-                Log.d(TAG, "🚀 NETWORK SUCCESS: Loaded ${channels.size} channels.")
+                tempFile.renameTo(cacheFile)
                 Result.success(channels)
             } else {
-                val errorBody = response.errorBody()?.string() ?: "Unknown error"
-                Log.e(TAG, "❌ API ERROR: $errorBody")
-                Result.failure(Exception("Failed to get playlist: $errorBody"))
+                Result.failure(Exception("API Error: ${response.code()}"))
             }
+        } catch (e: java.net.UnknownHostException) {
+            Log.e(TAG, "❌ DNS ERROR: Cannot resolve hostname - ${e.message}")
+            Result.failure(Exception("Network Error: Cannot reach the IPTV server. Please check your internet connection or try using a VPN. Error: ${e.message}"))
+        } catch (e: java.net.SocketTimeoutException) {
+            Log.e(TAG, "❌ TIMEOUT ERROR: ${e.message}")
+            Result.failure(Exception("Network Error: Connection timeout. The server is taking too long to respond. Please try again."))
+        } catch (e: java.io.IOException) {
+            Log.e(TAG, "❌ IO ERROR: ${e.message}")
+            Result.failure(Exception("Network Error: ${e.message}. Please check your internet connection."))
         } catch (e: Exception) {
-            Log.e(TAG, "❌ NETWORK ERROR: ${e.message}")
-            Result.failure(e)
+            Log.e(TAG, "❌ ERROR: ${e.message}", e)
+            Result.failure(Exception("Error loading playlist: ${e.message}"))
         }
     }
 
     fun clearCache() {
         val cacheFile = File(appContext.filesDir, CACHE_FILE_NAME)
-        if (cacheFile.exists()) {
-            cacheFile.delete()
-            Log.d(TAG, "🗑️ CACHE CLEARED: Local playlist deleted.")
-        }
-    }
-    
-    suspend fun loadPlaylist(url: String): Result<List<Channel>> = withContext(Dispatchers.IO) {
-        try {
-            val channels = parser.parseFromUrl(url)
-            Result.success(channels)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-    
-    suspend fun loadPlaylistFromString(content: String): Result<List<Channel>> = withContext(Dispatchers.IO) {
-        try {
-            val channels = parser.parseFromString(content)
-            Result.success(channels)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+        if (cacheFile.exists()) cacheFile.delete()
     }
 }

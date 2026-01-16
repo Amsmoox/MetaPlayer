@@ -1,6 +1,7 @@
 package com.metaplayer.iptv.presentation.viewmodel
 
 import android.app.Application
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.metaplayer.iptv.data.model.*
@@ -10,6 +11,7 @@ import com.metaplayer.iptv.data.repository.FavoritesRepository
 import com.metaplayer.iptv.data.repository.HistoryRepository
 import com.metaplayer.iptv.data.repository.PlaylistRepository
 import com.metaplayer.iptv.data.util.DeviceManager
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,17 +23,16 @@ data class PlaylistUiState(
     val favoriteUrls: Set<String> = emptySet(),
     val historyUrls: List<String> = emptyList(),
     val isLoading: Boolean = false,
+    val loadingProgress: Float = 0f,
     val error: String? = null,
     val macAddress: String = "",
     val deviceRegistered: Boolean = false,
     val m3uUrlFromBackend: String? = null,
-    // ACTIVATION STATUS
     val isActive: Boolean = true,
     val activationType: String? = null,
     val daysRemaining: Int? = null,
     val isExpired: Boolean = false,
     val activationError: String? = null,
-    // NAVIGATION PERSISTENCE
     val lastSelectedGroup: String = "ALL CHANNELS",
     val lastSelectedChannel: Channel? = null
 )
@@ -48,6 +49,8 @@ class PlaylistViewModel(
 
     private val _uiState = MutableStateFlow(PlaylistUiState())
     val uiState: StateFlow<PlaylistUiState> = _uiState.asStateFlow()
+    
+    private var loadingJob: Job? = null
 
     init {
         val macAddress = DeviceManager.getMacAddress(application)
@@ -56,7 +59,6 @@ class PlaylistViewModel(
             favoriteUrls = favoritesRepository.getFavorites(),
             historyUrls = historyRepository.getHistory()
         )
-        // Load from cache on startup
         initialLoad()
         startActivityTracking()
     }
@@ -66,7 +68,7 @@ class PlaylistViewModel(
             val cacheFile = File(getApplication<Application>().filesDir, "playlist_cache.m3u")
             if (cacheFile.exists() && cacheFile.length() > 0) {
                 _uiState.value = _uiState.value.copy(isLoading = true)
-                loadPlaylistInternal("", forceRefresh = false)
+                loadPlaylistInternal(forceRefresh = false)
                 updateDeviceInfoSilently()
             } else {
                 refreshAll(forceRefresh = false)
@@ -88,8 +90,14 @@ class PlaylistViewModel(
     }
 
     fun refreshAll(forceRefresh: Boolean = false) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        loadingJob?.cancel() 
+        loadingJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoading = true, 
+                error = null, 
+                loadingProgress = 0f,
+                channels = emptyList() 
+            )
             
             deviceRepository.getDeviceInfo().fold(
                 onSuccess = { info ->
@@ -102,25 +110,23 @@ class PlaylistViewModel(
                     
                     if (!info.is_active || (info.activation_status?.expired == true)) {
                         _uiState.value = _uiState.value.copy(isLoading = false)
-                    } else if (!m3uUrl.isNullOrBlank()) {
-                        loadPlaylistInternal(m3uUrl, forceRefresh)
                     } else {
-                        _uiState.value = _uiState.value.copy(isLoading = false)
+                        loadPlaylistInternal(forceRefresh)
                     }
                 },
                 onFailure = { 
-                    registerDeviceAndReload()
+                    registerDeviceAndReload(forceRefresh)
                 }
             )
         }
     }
 
-    private suspend fun registerDeviceAndReload() {
+    private suspend fun registerDeviceAndReload(forceRefresh: Boolean) {
         deviceRepository.registerDevice(m3uUrl = null).fold(
             onSuccess = {
                 _uiState.value = _uiState.value.copy(deviceRegistered = true)
                 updateStatusSuspend()
-                _uiState.value = _uiState.value.copy(isLoading = false)
+                loadPlaylistInternal(forceRefresh)
             },
             onFailure = {
                 _uiState.value = _uiState.value.copy(
@@ -132,22 +138,49 @@ class PlaylistViewModel(
         )
     }
 
-    private suspend fun loadPlaylistInternal(m3uUrl: String, forceRefresh: Boolean) {
-        playlistRepository.loadPlaylistFromBackend(forceRefresh).fold(
+    private suspend fun loadPlaylistInternal(forceRefresh: Boolean) {
+        playlistRepository.loadPlaylistStreaming(
+            forceRefresh = forceRefresh,
+            onProgress = { progress ->
+                _uiState.value = _uiState.value.copy(loadingProgress = progress)
+            },
+            onChannelsUpdated = { partialChannels ->
+                _uiState.value = _uiState.value.copy(channels = partialChannels)
+            }
+        ).fold(
             onSuccess = { channels ->
-                _uiState.value = _uiState.value.copy(channels = channels, isLoading = false)
-                if (m3uUrl.isNotBlank()) {
-                    epgRepository.fetchEpg(constructEpgUrl(m3uUrl))
-                } else {
-                    _uiState.value.m3uUrlFromBackend?.let {
-                        epgRepository.fetchEpg(constructEpgUrl(it))
-                    }
+                _uiState.value = _uiState.value.copy(
+                    channels = channels, 
+                    isLoading = false,
+                    loadingProgress = 1f
+                )
+                _uiState.value.m3uUrlFromBackend?.let {
+                    epgRepository.fetchEpg(constructEpgUrl(it))
                 }
             },
             onFailure = { 
                 _uiState.value = _uiState.value.copy(isLoading = false, error = it.message)
             }
         )
+    }
+
+    fun checkList() {
+        val cacheFile = File(getApplication<Application>().filesDir, "playlist_cache.m3u")
+        if (cacheFile.exists() && cacheFile.length() > 0) {
+            refreshAll(forceRefresh = false)
+        } else {
+            Toast.makeText(
+                getApplication(),
+                "No list found. Go to http://metabackend.com/ to upload your playlist.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+    
+    fun clearHistory() {
+        historyRepository.clearHistory()
+        _uiState.value = _uiState.value.copy(historyUrls = emptyList())
+        Toast.makeText(getApplication(), "Watch history cleared", Toast.LENGTH_SHORT).show()
     }
 
     private fun updateActivationFromDeviceInfo(info: DeviceInfoResponse) {
@@ -185,6 +218,8 @@ class PlaylistViewModel(
     }
 
     fun checkActivationStatus() {
+        if (_uiState.value.isLoading) return
+        
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             updateStatusSuspend()
@@ -201,7 +236,6 @@ class PlaylistViewModel(
 
     fun logout() {
         viewModelScope.launch {
-            // REMOVED clearCache() so the 41MB file stays on the phone after logout.
             val currentState = _uiState.value
             _uiState.value = PlaylistUiState(
                 macAddress = currentState.macAddress,
@@ -248,13 +282,8 @@ class PlaylistViewModel(
         }
     }
 
-    fun loadM3UUrlFromBackend() {
-        refreshAll(forceRefresh = true)
-    }
-
-    fun refreshPlaylist() {
-        refreshAll(forceRefresh = true)
-    }
+    fun loadM3UUrlFromBackend() { refreshAll(forceRefresh = true) }
+    fun refreshPlaylist() { refreshAll(forceRefresh = true) }
 
     private fun constructEpgUrl(m3uUrl: String): String {
         return try {

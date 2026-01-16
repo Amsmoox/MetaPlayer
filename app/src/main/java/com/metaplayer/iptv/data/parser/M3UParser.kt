@@ -2,37 +2,31 @@ package com.metaplayer.iptv.data.parser
 
 import com.metaplayer.iptv.data.model.Channel
 import java.io.BufferedReader
-import java.io.File
 import java.io.InputStream
 import java.io.InputStreamReader
-import java.net.URL
 
 class M3UParser {
     
     private val groupCache = mutableMapOf<String, String>()
 
-    fun parseFromUrl(url: String): List<Channel> {
-        return URL(url).openStream().use { parse(it) }
-    }
-
-    fun parseFromString(content: String): List<Channel> {
-        return content.byteInputStream().use { parse(it) }
-    }
-
-    fun parseFromFile(file: File): List<Channel> {
-        groupCache.clear()
-        return file.inputStream().use { parse(it) }
-    }
-
-    private fun parse(inputStream: InputStream): List<Channel> {
-        val channels = ArrayList<Channel>(50000) // Pre-allocate for better performance
-        val reader = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8), 32768) // Larger buffer
+    fun parseStreaming(
+        inputStream: InputStream,
+        totalBytes: Long,
+        onProgress: (Float) -> Unit,
+        onChannelsUpdate: (List<Channel>) -> Unit
+    ): List<Channel> {
+        val channels = ArrayList<Channel>(50000)
+        val reader = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8), 32768)
         
         var line: String?
         var currentInfo: TempInfo? = null
+        var bytesRead: Long = 0
+        var lastUpdate = 0L
         
         while (reader.readLine().also { line = it } != null) {
             val currentLine = line ?: continue
+            bytesRead += currentLine.length + 1 // +1 for newline character
+            
             if (currentLine.isEmpty()) continue
 
             if (currentLine.startsWith("#EXTINF:")) {
@@ -50,23 +44,33 @@ class M3UParser {
                         )
                     )
                     currentInfo = null
+                    
+                    // Update UI every 500 channels found
+                    if (channels.size % 500 == 0) {
+                        onChannelsUpdate(ArrayList(channels))
+                    }
                 }
             }
+            
+            // Update progress every 100KB read to avoid UI jank
+            if (totalBytes > 0 && bytesRead - lastUpdate > 102400) {
+                onProgress(bytesRead.toFloat() / totalBytes.toFloat())
+                lastUpdate = bytesRead
+            }
         }
+        
+        onProgress(1.0f)
+        onChannelsUpdate(channels)
         groupCache.clear() 
         return channels
     }
 
-    /**
-     * ULTRA FAST PARSER: Scans string directly without Regex or Map creation.
-     */
     private fun fastParseExtInf(line: String): TempInfo {
         var tvgId: String? = null
         var tvgName: String? = null
         var logo: String? = null
         var group: String? = null
 
-        // Extract attributes by manual scanning
         tvgId = extractAttribute(line, "tvg-id=\"")
         tvgName = extractAttribute(line, "tvg-name=\"")
         logo = extractAttribute(line, "tvg-logo=\"") ?: extractAttribute(line, "logo=\"")
@@ -74,7 +78,6 @@ class M3UParser {
         val rawGroup = extractAttribute(line, "group-title=\"") ?: "OTHER"
         group = groupCache.getOrPut(rawGroup) { rawGroup }
 
-        // Channel Name is everything after the last comma
         val commaIndex = line.lastIndexOf(',')
         val channelName = if (commaIndex != -1 && commaIndex < line.length - 1) {
             line.substring(commaIndex + 1).trim()
