@@ -1,5 +1,6 @@
 package com.metaplayer.iptv.data.parser
 
+import android.util.Log
 import com.metaplayer.iptv.data.model.Channel
 import java.io.BufferedReader
 import java.io.InputStream
@@ -8,6 +9,7 @@ import java.io.InputStreamReader
 class M3UParser {
     
     private val groupCache = mutableMapOf<String, String>()
+    private val TAG = "M3UParser"
 
     fun parseStreaming(
         inputStream: InputStream,
@@ -23,9 +25,11 @@ class M3UParser {
         var bytesRead: Long = 0
         var lastUpdate = 0L
         
+        Log.d(TAG, "Starting streaming parse...")
+        
         while (reader.readLine().also { line = it } != null) {
             val currentLine = line ?: continue
-            bytesRead += currentLine.length + 1 // +1 for newline character
+            bytesRead += currentLine.length + 1
             
             if (currentLine.isEmpty()) continue
 
@@ -33,32 +37,37 @@ class M3UParser {
                 currentInfo = fastParseExtInf(currentLine)
             } else if (!currentLine.startsWith("#")) {
                 if (currentInfo != null) {
-                    channels.add(
-                        Channel(
-                            name = currentInfo.name,
-                            url = currentLine.trim(),
-                            logo = currentInfo.logo,
-                            group = currentInfo.group,
-                            tvgId = currentInfo.tvgId,
-                            tvgName = currentInfo.tvgName
-                        )
+                    val channel = Channel(
+                        name = currentInfo.name,
+                        url = currentLine.trim(),
+                        logo = currentInfo.logo,
+                        group = currentInfo.group,
+                        tvgId = currentInfo.tvgId,
+                        tvgName = currentInfo.tvgName,
+                        tvgLogo = currentInfo.logo // Sync tvgLogo with logo field
                     )
+                    channels.add(channel)
+                    
+                    // Log first few channels to verify logos
+                    if (channels.size <= 5) {
+                        Log.d(TAG, "Parsed Channel: ${channel.name}, Logo: ${channel.logo}")
+                    }
+                    
                     currentInfo = null
                     
-                    // Update UI every 500 channels found
                     if (channels.size % 500 == 0) {
                         onChannelsUpdate(ArrayList(channels))
                     }
                 }
             }
             
-            // Update progress every 100KB read to avoid UI jank
             if (totalBytes > 0 && bytesRead - lastUpdate > 102400) {
                 onProgress(bytesRead.toFloat() / totalBytes.toFloat())
                 lastUpdate = bytesRead
             }
         }
         
+        Log.d(TAG, "Parse complete. Total channels: ${channels.size}")
         onProgress(1.0f)
         onChannelsUpdate(channels)
         groupCache.clear() 

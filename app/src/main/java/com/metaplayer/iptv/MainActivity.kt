@@ -29,10 +29,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // ENABLE FULLSCREEN IMMERSIVE MODE
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
-        // Use full screen including notch area
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes.layoutInDisplayCutoutMode = 
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -40,7 +38,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MetaPlayerTheme {
-                // Apply Immersive mode settings
                 val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
                 windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
@@ -108,6 +105,7 @@ class MainActivity : ComponentActivity() {
                                 PlayerScreen(
                                     channel = currentChannel,
                                     viewModel = playerViewModel,
+                                    playlistViewModel = playlistViewModel,
                                     onBackClick = { navController.popBackStack() }
                                 )
                             } else {

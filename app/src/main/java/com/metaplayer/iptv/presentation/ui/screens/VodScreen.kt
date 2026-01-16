@@ -1,5 +1,6 @@
 package com.metaplayer.iptv.presentation.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -16,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
@@ -27,7 +30,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import com.metaplayer.iptv.data.model.Channel
 import com.metaplayer.iptv.presentation.viewmodel.PlaylistViewModel
 
@@ -49,7 +54,6 @@ fun VodScreen(
     var selectedGroup by remember { mutableStateOf(uiState.lastSelectedGroup) }
     
     val filteredChannels = remember(selectedGroup, searchQuery, channels, uiState.favoriteUrls, uiState.historyUrls) {
-        // GLOBAL SEARCH LOGIC: If search query is not empty, ignore the selected group and search everything
         if (searchQuery.isNotEmpty()) {
             channels.filter { it.name.contains(searchQuery, ignoreCase = true) }
         } else {
@@ -98,7 +102,7 @@ fun VodScreen(
                         icon = when(group) { "FAVORITES" -> Icons.Default.Star; "LAST SEEN" -> Icons.Default.History; else -> null },
                         bgColor = when(group) { "FAVORITES" -> if (selectedGroup == group && searchQuery.isEmpty()) Color(0xFFFF9D00).copy(alpha = 0.2f) else Color.Transparent; "LAST SEEN" -> if (selectedGroup == group && searchQuery.isEmpty()) Color(0xFF333333) else Color.Transparent; else -> Color.Transparent },
                         onClick = { 
-                            searchQuery = "" // Clear search when a group is clicked
+                            searchQuery = "" 
                             selectedGroup = group 
                             playlistViewModel.updateNavigationState(group, null)
                         }
@@ -124,7 +128,6 @@ fun VodScreen(
                         onFavoriteToggle = { playlistViewModel.toggleFavorite(movie) },
                         onClick = { 
                             playlistViewModel.addToHistory(movie)
-                            // Only update navigation state if not searching
                             if (searchQuery.isEmpty()) {
                                 playlistViewModel.updateNavigationState(selectedGroup, movie)
                             }
@@ -149,13 +152,72 @@ private fun VodGroupItem(name: String, isSelected: Boolean, icon: ImageVector?, 
 
 @Composable
 private fun MoviePoster(movie: Channel, isFavorite: Boolean, onFavoriteToggle: () -> Unit, onClick: () -> Unit) {
+    var imageLoadError by remember { mutableStateOf(false) }
+    
     Column(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
         Box(modifier = Modifier.aspectRatio(0.68f).background(Color(0xFF0F0F0F), RectangleShape).border(1.dp, Color(0xFF1A1A1A), RectangleShape)) {
-            AsyncImage(model = movie.logo, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Box(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(20.dp).background(Color.Black.copy(alpha = 0.6f)).clickable { onFavoriteToggle() }, contentAlignment = Alignment.Center) {
+            val imageUrl = movie.tvgLogo?.takeIf { it.isNotBlank() } ?: movie.logo?.takeIf { it.isNotBlank() }
+            
+            // Cute placeholder (shown when no URL or on error)
+            if (imageUrl.isNullOrBlank() || imageLoadError) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFFFF9D00).copy(alpha = 0.4f),
+                                            Color(0xFFFF9D00).copy(alpha = 0.15f),
+                                            Color.Transparent
+                                        )
+                                    ),
+                                    CircleShape
+                                )
+                                .border(2.dp, Color(0xFFFF9D00).copy(alpha = 0.3f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Movie,
+                                contentDescription = null,
+                                tint = Color(0xFFFF9D00).copy(alpha = 0.8f),
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // Image (on top of placeholder if it loads successfully)
+            if (!imageUrl.isNullOrBlank() && !imageLoadError) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = movie.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    onState = { state ->
+                        if (state is AsyncImagePainter.State.Error) {
+                            imageLoadError = true
+                            Log.e("VOD_DEBUG", "Failed to load image for ${movie.name}: ${state.result.throwable.message} | URL: $imageUrl")
+                        } else if (state is AsyncImagePainter.State.Success) {
+                            imageLoadError = false
+                        }
+                    }
+                )
+            }
+            
+            Box(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(20.dp).background(Color.Black.copy(alpha = 0.6f)).clickable { onFavoriteToggle() }.zIndex(2f), contentAlignment = Alignment.Center) {
                 Icon(imageVector = if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder, null, tint = if (isFavorite) Color(0xFFFF9D00) else Color.White, modifier = Modifier.size(14.dp))
             }
-            Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(30.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black))))
+            Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(30.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black))).zIndex(1.5f))
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(text = movie.name.uppercase(), color = Color.LightGray, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)

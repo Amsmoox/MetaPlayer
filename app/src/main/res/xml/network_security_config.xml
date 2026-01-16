@@ -3,6 +3,16 @@
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
+            <certificates src="user" />
         </trust-anchors>
     </base-config>
+    <!-- Trust TMDB and other image CDNs -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">image.tmdb.org</domain>
+        <domain includeSubdomains="true">tmdb.org</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </domain-config>
 </network-security-config>
